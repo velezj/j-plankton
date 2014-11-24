@@ -182,14 +182,14 @@
 ;;========================================================================
 ;; Specify make-block-by-keyword for :sub-section keywords
 ;; The descriptor is the given to defsection minus the id
-(defmethod make-block-by-keyword ( (kw (eql :sub-section)) def-section-args)
-  (let ((name (gensym)))
-    (destructuring-bind ((title &key (id name) (label (labelize-name (string name)))) &body blocks) def-section-args
-      (defsection ((symbol-value name) title
-		   :id id
-		   :label label)
-	blocks)
-      (symbol-value name))))
+;; (defmethod make-block-by-keyword ( (kw (eql :sub-section)) def-section-args)
+;;   (let ((name (gensym)))
+;;     (destructuring-bind ((title &key (id name) (label (labelize-name (string name)))) &body blocks) def-section-args
+;;       (defsection ((symbol-value name) title
+;; 		   :id id
+;; 		   :label label)
+;; 	blocks)
+;;       (symbol-value name))))
 
 
 ;;========================================================================
