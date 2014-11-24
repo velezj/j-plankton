@@ -73,14 +73,14 @@ Which will fowards <class-args> to (make-instance '<class-name> <class-args>)
 Example
 =======
 
-	(defsection (@impl-note "IMPL Note")
+	(j-plankton.documentation:defsection (@impl-note "IMPL Note")
 		"We are using the algorithm by Jorkas, which implies the following condition: "
-		(:latex "$x_i \le Z^i_k \forall k$ iff. ....))
+		(:latex "$x_i \le Z^i_k \forall k$ iff. ...."))
 
-	(defsection (@intro "Intro")
+	(j-plankton.documentation:defsection (@intro "Intro")
 		"Some sample introduction using *Mardown*")
 
-	(defsection (@doc "Documentation for X")
+	(j-plankton.documentation:defsection (@doc "Documentation for X")
 		@intro
 		@impl-note)
 

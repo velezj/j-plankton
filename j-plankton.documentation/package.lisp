@@ -1,5 +1,10 @@
 ;;;; package.lisp
 
 (defpackage #:j-plankton.documentation
-  (:use #:cl))
+  (:use #:cl)
+  (:export
+   #:defsection
+   #:materialize-documentation
+   #:make-block)
+  )
 
