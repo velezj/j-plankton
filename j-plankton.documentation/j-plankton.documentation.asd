@@ -10,7 +10,7 @@
 	       #:optima)
   :serial t
   :components ((:file "package")
-               (:file "jplankton.documentation")
+               (:file "j-plankton.documentation")
 	       (:file "pandoc")))
 
 
@@ -21,6 +21,6 @@
   :depends-on (#:j-plankton.documentation
 	       #:fiveam)
   :serial t
-  :components ((:file "jplankton.documentation.test")))
+  :components ((:file "j-plankton.documentation.test")))
 
   
