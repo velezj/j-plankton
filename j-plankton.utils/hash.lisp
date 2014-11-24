@@ -1,5 +1,5 @@
 
-(in-package #:j-plankton.util)
+(in-package #:j-plankton.utils)
 
 
 ;;;; create a new custom hash table constructor which uses the object-equal-p

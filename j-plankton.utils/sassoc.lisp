@@ -1,5 +1,5 @@
 
-(in-package #:j-plankton.util)
+(in-package #:j-plankton.utils)
 
 
 ;;;;
@@ -12,7 +12,7 @@
 ;;;; first key.
 ;;;;
 ;;;; For Example:
-;;;; (make-sassoc '(:a 1 :b 2 :c 3 4)) => ( (:a (1)) (:b (2)) (:c (3 4)) )
+;;;; (parse-sassoc-to-alist '(:a 1 :b 2 :c 3 4)) => ( (:a (1)) (:b (2)) (:c (3 4)) )
 
 
 
@@ -29,7 +29,7 @@
 ;;;; of keys.
 ;;;; By default, keywords are the only keys, but this can be changed
 ;;;; by giving the key predicate function
-(defun make-sassoc (property-list &key (is-key #'is-in-keyword-package) (default-key nil) (test #'eql))
+(defun parse-sassoc-to-alist (property-list &key (is-key #'is-in-keyword-package) (default-key nil) (test #'eql))
   (let ((current-key default-key)
 	(alist nil))
     (dolist (e property-list)

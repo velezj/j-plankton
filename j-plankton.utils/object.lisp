@@ -1,5 +1,5 @@
 
-(in-package #:j-plankton.util)
+(in-package #:j-plankton.utils)
 
 
 ;;;; A generic euality predicate which can be instantiated for different

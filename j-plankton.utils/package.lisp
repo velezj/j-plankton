@@ -1,6 +1,6 @@
 ;;;; package.lisp
 
-(defpackage #:j-plankton.util
+(defpackage #:j-plankton.utils
   (:nicknames #:jpu)
   (:use #:cl)
   (:shadow #:gethash
@@ -38,6 +38,6 @@
    #:recursive-split
    #:multiple-split
 
-   #:make-sassoc
+   #:parse-sassoc-to-alist
    ))
 

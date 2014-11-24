@@ -1,4 +1,4 @@
-(in-package #:j-plankton)
+(in-package #:j-plankton.concept)
 
 
 ;;;;
@@ -73,16 +73,6 @@
 
 
 ;;;;
-;;;; Checks that a given specification for a documented lambda parameter
-;;;; is comforming to the syntax:
-;;;; it is a list, with the last element a non-empty string
-;;;; Returns a continuable error otherwise
-;; (defun %check-documented-lambda-arg-conformant (arg)
-  
-	
-
-
-;;;;
 ;;;; Ok, we want ot parse a "documented lambda list", which is
 ;;;; a modified lambda list where each parameter *must* include a
 ;;;; documentation string.  In essence, each parameter is itself 
@@ -112,7 +102,7 @@
 		  (rest-args &rest)
 		  (aux-args &aux)
 		  (optional-args &optional))
-	  (jpu:make-sassoc 
+	  (jpu:parse-sassoc-to-alist
 	   lambda-list 
 	   :is-key 
 	   #'(lambda (k) 
@@ -232,24 +222,6 @@
 	(append normal-args (alexandria:flatten key-args) rest-arg)))))
   
 
-
-;;;;
-;;;; Returns the default concepts package which is based on the current
-;;;; package.  This will create a default concepts package in the current
-;;;; package if not there, and returns the package
-(defvar *default-concept-package-name* (symbol-name :default-concepts)
-  "The name of the defaultconcepts package created insude current package")
-
-(defun get-default-concepts-package ()
-  (if (find-symbol *default-concept-package-name* *package*)
-      (find-symbol *default-concept-package-name* *package*)
-      (progn
-	(intern *default-concept-package-name* *package*)
-	(let ((s (find-symbol *default-concept-package-name* *package*)))
-	  (setf (symbol-value s)
-		(make-package *default-concept-package-name*))
-	  s))))
-  
 	
 
 ;;;;
@@ -290,7 +262,9 @@
 		 (format t "created new concept ~A~%" ',concept-symbol))))))))
   
   
-       
+
+;;;;
+;;;; Some test defined concepts!       
 (define-concept foobar ( (x "") 
 			 (y "")) 
   "The FOOBAR concept")
@@ -361,6 +335,8 @@
       `(define-concept-method-impl ,method-name (,concept-check ,@body-lambda-args) ,@body-body))))
 
 
+;;;;
+;;;; Some test concept implementations
 (implement-concept 
     (foobar impl-fast "FAST foobar implementation")
   (x y)

@@ -1,5 +1,5 @@
 
-(in-package #:j-plankton.util)
+(in-package #:j-plankton.utils)
 
 ;;;;
 ;;;; This file contains simple sorting utilities for sequences

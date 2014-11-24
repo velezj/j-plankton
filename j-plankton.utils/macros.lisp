@@ -1,5 +1,5 @@
 
-(in-package #:j-plankton.util)
+(in-package #:j-plankton.utils)
 
 ;;;;
 ;;;; classic with-gensyms macro from "On Lisp" by Paul Graham
