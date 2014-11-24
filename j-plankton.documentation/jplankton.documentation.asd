@@ -1,6 +1,6 @@
 ;;;; jplankton.documentation.asd
 
-(asdf:defsystem #:jplankton.documentation
+(asdf:defsystem #:j-plankton.documentation
   :description "Describe jplankton.documentation here"
   :author "Your Name <your.name@example.com>"
   :license "Specify license here"
@@ -14,11 +14,11 @@
 	       (:file "pandoc")))
 
 
-(asdf:defsystem #:jplankton.documentation/test
+(asdf:defsystem #:j-plankton.documentation/test
   :description "Testing of jplankton.documentation using fiveam"
   :author "Your Name <your.name@example.com>"
   :license "Specify license here"
-  :depends-on (#:jplankton.documentation
+  :depends-on (#:j-plankton.documentation
 	       #:fiveam)
   :serial t
   :components ((:file "jplankton.documentation.test")))

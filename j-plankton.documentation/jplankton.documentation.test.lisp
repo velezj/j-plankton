@@ -1,8 +1,8 @@
 
-(defpackage #:jplankton.documentation/test
+(defpackage #:j-plankton.documentation/test
   (:use #:cl))
 
-(in-package jplankton.documentation/test)
+(in-package j-plankton.documentation/test)
 
 ;;=======================================================================
 ;; Make a new suite for string functions in the jplankton.documentation

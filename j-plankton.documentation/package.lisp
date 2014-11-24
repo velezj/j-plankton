@@ -1,5 +1,5 @@
 ;;;; package.lisp
 
-(defpackage #:jplankton.documentation
+(defpackage #:j-plankton.documentation
   (:use #:cl))
 

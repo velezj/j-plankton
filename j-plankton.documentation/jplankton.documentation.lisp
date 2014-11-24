@@ -1,6 +1,6 @@
 ;;;; jplankton.documentation.lisp
 
-(in-package #:jplankton.documentation)
+(in-package #:j-plankton.documentation)
 
 ;========================================================================
 ;; A text-t is a string and an encoding together
@@ -109,31 +109,88 @@
     section))
 	    
 
+;;========================================================================
+;; create a new block from a block-descriptor
+;; This is a generic method specialized for different
+;; descriptors
+;;
+;; In particular, descriptors which are lsits beginning
+;; with a keyword are further specified using
+;; the make-block-by-keyword gneric method
+(defgeneric make-block (block-descriptor)
+  (:documentation "generates a block object given a description"))
+
 
 ;;========================================================================
-;; create a new block from a given block descriptor
-;; A plain string will be treated as a text block
-;;
-;; a (<:kw> string) will be treated as a text block
-;; with :kw text-format
-;;
-;; a (:class type args...) will be forwarded to (make-instance type <args>)
-(defun make-block (block-descriptor)
-  (optima:match block-descriptor
-    ( (and (list fmt str) (list (type keyword) (type string)))
-      (make-text str :format fmt))
-    ( (cons :class (cons (type symbol) _))
-      (apply #'make-instance (cdr block-descriptor)))
-    ( (type string)
-      (make-text (%strip-whitespace-smartly block-descriptor)))
-    ( x (if (and (symbolp x)
-		 (boundp x)
-		 (eql (type-of (symbol-value x))
-		      'section-t))
-	    (symbol-value x)
-	    (optima:fail)))
-    (otherwise
-     (error "Unknown block descriptor: ~A" block-descriptor))))
+;; Craete a new block given a block keyword and the rest of the
+;; block descriptor
+(defgeneric make-block-by-keyword (kw descriptor)
+  (:documentation "generates a block given a keyword and descriptor"))
+
+;;========================================================================
+;; specify make-block for string descriptors.
+;; A plain string block descriptor is craeted into a text-t block
+;; and first processed using %strip-whitespace-smartly
+(defmethod make-block ( (str string) )
+  (make-text (%strip-whitespace-smartly str)))
+
+;;========================================================================
+;; specify make-block when given a symbol.
+;; If the symbol has a bound value, use that value
+;; as the block, otherwise try to look up the symbol in
+;; the section id.
+;; It is an error if the symbol is not bound or a section id
+(defmethod make-block ( (s symbol) )
+  (if (boundp s)
+      s
+      (or
+       (gethash s *sections-by-id* nil)
+       (error "Cannot make a block out of a symbol which is not bound or a section id, bad symbol: ~S" s))))
+
+;;========================================================================
+;; Specify make-block for block descripros which are lists
+;; This particular specification will check if teh list starts with
+;; a keyword and dispath the call to make-block-by-keyword
+(defmethod make-block ( (list-descriptor list) )
+  (let ((kw (car list-descriptor))
+	(desc (if (= 2 (length list-descriptor))
+		  (nth 1 list-descriptor)
+		  (cdr list-descriptor))))
+    (make-block-by-keyword kw desc)))
+
+;;========================================================================
+;; Specify make-block for nil descriptors (this is an error)
+(defmethod make-block ( (descriptor (eql nil)))
+  (error "Nil os not a valid block descriptor!"))
+
+;;========================================================================
+;; Specify a default make-block-by-keyword which assumes that the
+;; keyword is a text format and assumes teh descriptor is a
+;; single string, creating a new text-t block from it with the
+;; given format (the keyword)
+(defmethod make-block-by-keyword ( (format t) (descriptor string) )
+  (make-text descriptor :format format))
+
+
+;;========================================================================
+;; Specify make-block-by-keyword for :class keyword.
+;; The descriptor is fed directly to make-instance to
+;; create a block
+(defmethod make-block-by-keyword ( (kw (eql :class)) args )
+  (apply #'make-instance args))
+
+;;========================================================================
+;; Specify make-block-by-keyword for :sub-section keywords
+;; The descriptor is the given to defsection minus the id
+(defmethod make-block-by-keyword ( (kw (eql :sub-section)) def-section-args)
+  (let ((name (gensym)))
+    (destructuring-bind ((title &key (id name) (label (labelize-name (string name)))) &body blocks) def-section-args
+      (defsection ((symbol-value name) title
+		   :id id
+		   :label label)
+	blocks)
+      (symbol-value name))))
+
 
 ;;========================================================================
 ;; Given a string, returns a string which can be used for a label.

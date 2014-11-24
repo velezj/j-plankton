@@ -1,5 +1,5 @@
 
-(in-package jplankton.documentation)
+(in-package j-plankton.documentation)
 
 ;;========================================================================
 (defparameter *format-to-pandoc-argument-mapping*
