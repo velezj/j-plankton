@@ -223,14 +223,21 @@
   
 
 	
-
+;;;; 
+;;;; A special symbol meaning that a concept has an unset implementation tag
+(eval-when (:compile-toplevel)
+  (defconstant +UNSET-IMPLEMENTATION-TAG+ (gensym "unset-impl-")
+    "Special symbol denoting an unset implementation tag.
+   This is the default value for all defined concepts initially
+   unless changed by a call to implement-concept"))
+  
 ;;;;
 ;;;; Define a particular concept
 ;;;; This just makes it's name available in the current concepts package
 ;;;; (or the given concepts package, defautls ot current)
 (defmacro define-concept (concept-name concept-args doc &key (package *concepts-package*) (error-when-duplicate-concept t))
-  (let ((concept-method (intern (concatenate 'string (symbol-name concept-name) "-METHOD")))
-	(concept-method-impl (intern (concatenate 'string (symbol-name concept-name) "-METHOD-IMPL"))))
+  (let ((concept-method (intern (concatenate 'string (symbol-name concept-name) "")))
+	(concept-method-impl (intern (concatenate 'string (symbol-name concept-name) "-IMPL"))))
     (with-concepts-package package
       (if (and (find-symbol (symbol-name concept-name) *concepts-package*)
 	       error-when-duplicate-concept)
@@ -243,7 +250,7 @@
 	      (eval-when (:load-toplevel :execute)
 		(proclaim `(special ,concept-symbol)))
 	      (setf (documentation concept-symbol 'VARIABLE) doc)
-	      (setf (symbol-value concept-symbol) nil)
+	      (setf (symbol-value concept-symbol) +UNSET-IMPLEMENTATION-TAG+)
 	      ;; create the concept list in package if needed
 	      (if (not (find-symbol (symbol-name '+concept-list+) *concepts-package*))
 		  (let ((concept-list (intern (symbol-name '+concept-list+) *concepts-package*)))
@@ -278,8 +285,9 @@
 ;;;; Returns the concept symbol for a concept, or NIL of not found
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun find-concept-symbol (concept-name &optional (package *concepts-package*))
-    (find-symbol concept-name package)))
-
+    (etypecase concept-name
+      (symbol (find-symbol (symbol-name concept-name) package))
+      (string (find-symbol concept-name package)))))
 
 ;;;;
 ;;;; Returns the implementation tag symbol.
@@ -324,14 +332,20 @@
 ;;;; the implementation tag.
 ;;;; The implementation tag will be added to the current *concepts-package*
 ;;;; if not already there (with + around it)
-(defmacro implement-concept ( (concept-name implementation-tag doc) &body body )
-  (let ((method-name (intern (concatenate 'string (symbol-name concept-name) "-METHOD-IMPL")))
+(defmacro implement-concept ( (concept-name implementation-tag doc &key (default-implementation nil)) &body body )
+  (let ((method-name (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
 	(body-lambda-args (car body))
 	(body-body (cdr body)))
     (let* ((implementation-tag-+ (concatenate 'string "+" (symbol-name implementation-tag) "+"))
 	   (implementation-tag-symbol 
 	    (find-or-make-implementation-tag implementation-tag-+ (symbol-name concept-name) doc))
-	   (concept-check (list (gensym "concept-var-") (list 'eql implementation-tag-symbol))))
+	   (concept-check (list (gensym "concept-var-") `(eql ',implementation-tag-symbol))))
+      (when (and 
+	     (eq (symbol-value (find-concept-symbol (symbol-name concept-name)))
+		 +UNSET-IMPLEMENTATION-TAG+)
+	     default-implementation)
+	(setf (symbol-value (find-concept-symbol (symbol-name concept-name)))
+	      implementation-tag-symbol))
       `(define-concept-method-impl ,method-name (,concept-check ,@body-lambda-args) ,@body-body))))
 
 
@@ -343,7 +357,7 @@
   (+ x y))
 
 (implement-concept 
-    (foobar impl-generic "GENERIC foobar implementation")
+    (foobar impl-generic "GENERIC foobar implementation" :default-implementation t)
   (x y)
   (- x y))
 
