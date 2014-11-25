@@ -191,6 +191,100 @@
 ;; 	blocks)
 ;;       (symbol-value name))))
 
+;;========================================================================
+;; A serial-block-t is just a group of blocks in order
+(defclass serial-block-t ()
+  ((blocks :initform nil
+	   :initarg :blocks)))
+
+;;========================================================================
+;; Make a serial block from a list of blocks
+(defun make-serial-block (blocks)
+  (make-instance 'serial-block-t :blocks blocks))
+
+;;========================================================================
+;; specify make-block-by-keyword for :serial-block keyword
+;; to make a serial block
+(defmethod make-block-by-keyword ( (kw (eql :serial-block)) blocks )
+  (make-serial-block blocks))
+
+;;========================================================================
+;; creates a block of documentation from a particular symbol and
+;; it's common list DOCUMETNATION docs.
+;; the :format keyword is a list of specifiers for how and what docs
+;; are used, and can be the following (defaults to '(:fancy t :doc-type :all)):
+;;    :fancy (t/nil) = do we pretty-print things in a fancy format
+;;                     (defualt to t)
+;;    :doc-type = what docuementation do we query. This is a list with
+;;                the documentation wanted, or :all which means to use
+;;                all possible documentation. The possible doc-types are:
+;;                    'compiler-macro
+;;                    'function
+;;                    'method-combination
+;;                    'setf
+;;                    'structure
+;;                    't
+;;                    'type
+;;                    'variable
+;;                (defaults to :all)
+(defun make-api-block (symbol &key (format '(:fancy t :doc-type :all)))
+  (destructuring-bind (&key (fancy t)
+			    (doc-type :all))
+      format
+    ;; ok, first take care of :all doc-type by adding the docs based on
+    ;; the type of symbol
+    (when (eql doc-type :all)
+      (setf doc-type
+	    (etypecase symbol
+	      (function (list 't 'function))
+	      (list (list 'function 'compiler-macro))
+	      (symbol (list 'function 'compiler-macro 'setf 'method-combination 'type 'structure 'variable))
+	      (method-combination (list 't 'method-combination))
+	      (standard-method (list 't))
+	      (package (list 't))
+	      (standard-class (list 't 'type)))))
+    ;; ok, now create an output string for the queried documentation
+    (make-text
+     (with-output-to-string (s)
+       (if fancy
+	   (format s "~A~%===============~%" symbol)
+	   (format s "~A: " symbol))
+       (dolist (dtype doc-type)
+	 (when (documentation symbol dtype)
+	   (if fancy
+	       (format s "* ~A: ~%     ~A~%~%" dtype (documentation symbol dtype))
+	       (format s "~A~%" (documentation symbol dtype)))))))))
+       
+       
+;;========================================================================
+;; specify make-block-by-keyword for :api keywords.
+;; These blocks take any number of symbols after :symbols and
+;; include the API documentation for those symbols.
+;; additionally, further keywords are available:
+;;    :prefix-block = attach the given block before any api block
+;;                    (defaults to #\Newline)
+;;    :postfix-block = attach given block after any api block
+;;                     (defaults to nil)
+;;    :api-format = arguments given to (make-api-block :format <>)
+;;                  (defaults to (:fancy t :doc-type :all))
+;;    :symbols = list of symobls to add documentation for
+(defmethod make-block-by-keyword ( (kw (eql :api)) args)
+  (destructuring-bind
+	(&key
+	 symbols
+	 (prefix-block (string #\Newline))
+	 (postfix-block nil)
+	 (api-format '(:fancy t :doc-type :all)))
+      args
+    ;; create a serial block
+    (make-serial-block
+     (loop for s in symbols
+	when (not (null prefix-block))
+	collect (make-block prefix-block)
+	collect (make-api-block s :format api-format)
+	when (not (null postfix-block))
+	collect (make-block postfix-block)))))
+		       
 
 ;;========================================================================
 ;; Given a string, returns a string which can be used for a label.
@@ -270,6 +364,20 @@
     (format stream "~A" doc)))
 
 
+;;========================================================================
+;; materialize documentation for a serial-block-t.
+;; This just call materialize-documentation for each internal block
+;; in order
+(defmethod materialize-documentation ((serial serial-block-t)
+				      &key
+					(format :latex)
+					(stream nil)
+					(depth nil))
+  (dolist (b (slot-value serial 'blocks))
+    (materialize-documentation b
+			       :format format
+			       :stream stream
+			       :depth depth)))
 						       
 
 ;;========================================================================
