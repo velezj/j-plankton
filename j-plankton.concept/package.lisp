@@ -9,6 +9,7 @@
    #:with-concepts-package
    #:define-concept
    #:implement-concept
+   #:find-concept-symbol
    #:print-concepts
    #:print-implementation-tags))
 

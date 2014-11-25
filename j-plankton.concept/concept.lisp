@@ -109,7 +109,29 @@
 	       (and (symbolp k) 
 		    (equal #\& (elt (symbol-name k) 0)))) 
 	   :default-key '&ordinary)))
-      (let ((special-args (append key-args aux-args)))
+      (let* ((special-args (append key-args aux-args))
+	     (ll-alist
+	       (jpu:parse-sassoc-to-alist
+		lambda-list 
+		:is-key 
+		#'(lambda (k) 
+		    (and (symbolp k) 
+			 (equal #\& (elt (symbol-name k) 0)))) 
+		:default-key '&ordinary))
+	     (other-keys
+	       (remove-if 
+		#'(lambda (key)
+		    (member key 
+			    '(&ordinary &rest &key &aux &optional)))
+		(mapcar #'car ll-alist)))
+	     (other-all
+	       (alexandria:mappend
+		#'(lambda (k)
+		    (let ((a (assoc k ll-alist)))
+		      (append
+		       (list (car a))
+		       (cdr a))))
+		other-keys)))
 	
 	;; make sure that each element is a list and that
 	;; the last element is a string
@@ -121,36 +143,62 @@
 	
 	(list :positional (append ordinary-args optional-args)
 	      :named special-args
-	      :rest rest-args)))))
+	      :rest rest-args
+	      :others other-all)))))
+
+
+;;;;
+;;;; Returns the head of hte list, all but the last element
+(defun all-but-last (list)
+  (subseq list 0 (1- (length list))))
     
 
 ;;;;
 ;;;; "normalizes" arguments from the result of parsing a documented lambda list
 ;;;; so that each arugment is in the cacnonical form
 ;;;; and in hte right order for forwarding arguments
-;;;; ( :var-forward forward :doc doc :original original-form )
+;;;; ( :var-forward forward 
+;;;;   :lambda-list-foward foward 
+;;;;   :doc doc 
+;;;;   :original original-form
+;;;;   :type [:positional | :named | :rest ] )
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun %normalize-parsed-documented-lambda-list (parsed-doc-ll)
     (append
      (mapcar #'(lambda (ordinary-arg)
-		 (list :var-forward (list (first ordinary-arg))
-		       :doc (second ordinary-arg)
-		       :original ordinary-arg))
+		 (list :var-forward (list (if (listp (first ordinary-arg))
+					      (elt (first ordinary-arg) 0)
+					      (first ordinary-arg)))
+		       :lambda-list-foward (list (first ordinary-arg))
+		       :doc (car (last ordinary-arg))
+		       :original ordinary-arg
+		       :type :positional))
 	     (getf parsed-doc-ll :positional))
      (mapcar #'(lambda (named-arg)
 		 (let ((name
-			(if (> (length named-arg) 2)
-			    (elt named-arg 1)
+			;(if (> (length named-arg) 2)
+			;    (elt named-arg 1)
 			    (intern (symbol-name (elt named-arg 0)) 
-				    (find-package "KEYWORD")))))
+				    (find-package "KEYWORD"))))
 		   (list :var-forward (list name (elt named-arg 0))
+			 :lambda-list-foward (list (all-but-last named-arg))
 			 :doc (car (last named-arg))
-			 :original named-arg)))
+			 :original named-arg
+			 :type :named)))
 	     (getf parsed-doc-ll :named))
+     (mapcar #'(lambda (other-arg)
+		 (list :var-forward nil
+		       :lambda-list-foward (list other-arg)
+		       :doc nil
+		       :original other-arg
+		       :type :other))
+	     (getf parsed-doc-ll :others))
      (mapcar #'(lambda (rest-arg)
-		 (list :var-forward (list (first rest-arg))
-		       :doc (second rest-arg)
-		       :original rest-arg))
+		 (list :var-forward (list (all-but-last rest-arg))
+		       :lambda-list-foward (list (all-but-last rest-arg))
+		       :doc (car (last rest-arg))
+		       :original rest-arg
+		       :type :rest))
 	     (getf parsed-doc-ll :rest)))))
   
 
@@ -171,14 +219,48 @@
 ;;;; Given a documetned lambda list, returns a plain lambda list for it
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun %documented-lambda-list-to-lambda-list (doc-lambda-list)
-    (mapcar #'(lambda (doc-elt)
-		(if (listp doc-elt)
-		    (if (> (length doc-elt) 2)
-			(subseq doc-elt 0 (1- (length doc-elt)))
-			(first doc-elt))
-		    doc-elt))
-	    doc-lambda-list)))
-
+    (let* ((norm-args
+	     (%normalize-parsed-documented-lambda-list
+	      (%parse-documented-lambda-list 
+	       doc-lambda-list)))
+	   (positional 
+	     (alexandria:mappend 
+	      #'(lambda (norm-arg)
+		  (getf norm-arg :lambda-list-foward))
+	      (remove-if #'(lambda (norm-arg)
+			     (not (eq :positional
+				      (getf norm-arg :type))))
+			 norm-args)))
+	   (named 
+	     (alexandria:mappend 
+	      #'(lambda (norm-arg)
+		  (getf norm-arg :lambda-list-foward))
+	      (remove-if #'(lambda (norm-arg)
+			     (not (eq :named
+				      (getf norm-arg :type))))
+			 norm-args)))
+	   (rest 
+	     (alexandria:mappend 
+	      #'(lambda (norm-arg)
+		  (getf norm-arg :lambda-list-foward))
+	      (remove-if #'(lambda (norm-arg)
+			     (not (eq :rest
+				      (getf norm-arg :type))))
+			 norm-args)))
+	   (others
+	     (alexandria:mappend
+	      #'(lambda (norm-arg)
+		  (getf norm-arg :lambda-list-foward))
+	      (remove-if #'(lambda (norm-arg)
+			     (not (eq :other
+				      (getf norm-arg :type))))
+			 norm-args))))
+      (append positional 
+	      (when rest (list '&rest (caar rest)))
+	      (when named (list '&key)) named
+	      others)))
+  
+  
 ;;;;
 ;;;; This is a tricky function:
 ;;;; Given a lambda args defintiion ( like (a b &rest args &key (c 1) d) )
@@ -332,10 +414,9 @@
 ;;;; the implementation tag.
 ;;;; The implementation tag will be added to the current *concepts-package*
 ;;;; if not already there (with + around it)
-(defmacro implement-concept ( (concept-name implementation-tag doc &key (default-implementation nil)) &body body )
+(defmacro implement-concept ( (concept-name implementation-tag doc &key (default-implementation nil)) documented-lambda-list &body body )
   (let ((method-name (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
-	(body-lambda-args (car body))
-	(body-body (cdr body)))
+	(normal-lambda-args (%documented-lambda-list-to-lambda-list documented-lambda-list)))
     (let* ((implementation-tag-+ (concatenate 'string "+" (symbol-name implementation-tag) "+"))
 	   (implementation-tag-symbol 
 	    (find-or-make-implementation-tag implementation-tag-+ (symbol-name concept-name) doc))
@@ -346,7 +427,7 @@
 	     default-implementation)
 	(setf (symbol-value (find-concept-symbol (symbol-name concept-name)))
 	      implementation-tag-symbol))
-      `(define-concept-method-impl ,method-name (,concept-check ,@body-lambda-args) ,@body-body))))
+      `(define-concept-method-impl ,method-name (,concept-check ,@normal-lambda-args) ,@body))))
 
 
 ;;;;
