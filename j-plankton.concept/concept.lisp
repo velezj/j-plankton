@@ -324,6 +324,44 @@
 	(append normal-args (alexandria:flatten key-args) rest-arg)))))
   
 
+;;;;
+;;;; Returns the type specifications in a documented-lambda list.
+;;;; This is returned for all the arguments.
+(defun %documented-lambda-list-argument-types (doc-lambda-list &key (error-on-missing-doc t))
+  (let ((norm-args
+	  (%normalize-parsed-documented-lambda-list
+	   (%parse-documented-lambda-list
+	    doc-lambda-list
+	    :error-on-missing-doc error-on-missing-doc))))
+    (mapcar #'(lambda (norm-arg)
+		(if (eq :positional (getf norm-arg :type))
+		    (if (listp (car (getf norm-arg :lambda-list-foward)))
+			(elt (car (getf norm-arg :lambda-list-foward)) 1)
+			't)
+		    't))
+	    (remove-if #'(lambda (norm-arg)
+			   (eq :other (getf norm-arg :type)))
+		       norm-args))))
+;;;;
+;;;; Creates a symbol based on a concept and the typed arguments given 
+;;;; to it
+(defun %create-concept-symbol (concept-name arg-types &optional (package *concepts-package*) )
+  (let ((s 
+	  (intern (apply #'concatenate 
+			 'string 
+			 (symbol-name concept-name)
+			 (mapcar #'(lambda (type)
+				     (concatenate 'string
+						  "["
+						  (symbol-name type)
+						  "]"))
+				 arg-types))
+		  package)))
+    (setf (symbol-value s) +UNSET-IMPLEMENTATION-TAG+)
+    s))
+		       
+		       
+
 	
 ;;;; 
 ;;;; A special symbol meaning that a concept has an unset implementation tag
@@ -339,7 +377,8 @@
 ;;;; (or the given concepts package, defautls ot current)
 (defmacro define-concept (concept-name concept-args doc &key (package *concepts-package*) (error-when-duplicate-concept t))
   (let ((concept-method (intern (concatenate 'string (symbol-name concept-name) "")))
-	(concept-method-impl (intern (concatenate 'string (symbol-name concept-name) "-IMPL"))))
+	(concept-method-impl (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
+	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG"))))
     (with-concepts-package package
       (if (and (find-symbol (symbol-name concept-name) *concepts-package*)
 	       error-when-duplicate-concept)
@@ -365,8 +404,22 @@
 		   (:documentation ,doc))
 		 (defgeneric ,concept-method-impl ( +concept-impl+ ,@(%documented-lambda-list-to-lambda-list concept-args) )
 		   (:documentation ,doc))
+		 (defgeneric ,concept-implementation-tag ( ,@(%documented-lambda-list-to-lambda-list concept-args) )
+		   (:documentation "retrieves the current implementation tag for a concept (based on types used to callthe concept!)"))
+		 (defmethod ,concept-implementation-tag ( ,@(%documented-lambda-list-to-lambda-list concept-args) )
+		   (let ((concept-symbol
+			   (find-symbol 
+			    (symbol-name 
+			     (%create-concept-symbol ',concept-name
+						     ',(%documented-lambda-list-argument-types concept-args)))
+			     *concepts-package*)))
+		     (if (and concept-symbol (boundp concept-symbol))
+			 concept-symbol
+			 (if (next-method-p)
+			     (call-next-method)
+			     ,concept-symbol))))
 		 (defmethod ,concept-method ( ,@(%documented-lambda-list-to-lambda-list concept-args) )
-		   (,concept-method-impl ,concept-symbol ,@(%extract-arguments-from-documented-lambda-list concept-args)))
+		   (,concept-method-impl (,concept-implementation-tag ,@(%extract-arguments-from-documented-lambda-list concept-args)) ,@(%extract-arguments-from-documented-lambda-list concept-args)))
 		 ;; print to the user
 		 (format t "created new concept ~A~%" ',concept-symbol))))))))
   
@@ -436,18 +489,22 @@
 ;;;; if not already there (with + around it)
 (defmacro implement-concept ( (concept-name implementation-tag doc &key (default-implementation nil)) documented-lambda-list &body body )
   (let ((method-name (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
-	(normal-lambda-args (%documented-lambda-list-to-lambda-list documented-lambda-list :error-on-missing-doc nil)))
+	(normal-lambda-args (%documented-lambda-list-to-lambda-list documented-lambda-list :error-on-missing-doc nil))
+	(concept-symbol (%create-concept-symbol concept-name 
+						(%documented-lambda-list-argument-types documented-lambda-list :error-on-missing-doc nil))))
     (let* ((implementation-tag-+ (concatenate 'string "+" (symbol-name implementation-tag) "+"))
 	   (implementation-tag-symbol 
 	    (find-or-make-implementation-tag implementation-tag-+ (symbol-name concept-name) doc))
 	   (concept-check (list (gensym "concept-var-") `(eql ',implementation-tag-symbol))))
       (when (and 
-	     (eq (symbol-value (find-concept-symbol (symbol-name concept-name)))
+	     (eq (symbol-value concept-symbol)
 		 +UNSET-IMPLEMENTATION-TAG+)
 	     default-implementation)
-	(setf (symbol-value (find-concept-symbol (symbol-name concept-name)))
+	(setf (symbol-value concept-symbol)
 	      implementation-tag-symbol))
-      `(define-concept-method-impl ,method-name (,concept-check ,@normal-lambda-args) ,@body))))
+      `(progn
+	   
+	 (define-concept-method-impl ,method-name (,concept-check ,@normal-lambda-args) ,@body)))))
 
 
 ;;;;
