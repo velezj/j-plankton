@@ -541,9 +541,12 @@
 		     ',concept-name
 		     ',(%documented-lambda-list-argument-types documented-lambda-list)))
 		   *concepts-package*)))
-	     (if (and concept-symbol (boundp concept-symbol))
+	     (if (and concept-symbol
+		      (boundp concept-symbol)
+		      (not (eq (symbol-value concept-symbol) +UNSET-IMPLEMENTATION-TAG+)))
 		 (values (symbol-value concept-symbol)
-			 concept-symbol)
+			 concept-symbol
+			 (eq (symbol-value concept-symbol) +UNSET-IMPLEMENTATION-TAG+))
 		 (if (next-method-p)
 		     (call-next-method)
 		     (values (format nil "** ~A" ,concept-symbol)
@@ -554,16 +557,44 @@
 ;;;;
 ;;;; Some test concept implementations
 (implement-concept 
-    (foobar impl-fast "FAST foobar implementation")
-  ( (x "") 
-    (y "") ) 
+    (foobar impl-integer "FAST foobar implementation")
+  ( ((x integer) "") 
+    ((y integer) "") ) 
   (+ x y))
 
 (implement-concept 
     (foobar impl-generic "GENERIC foobar implementation" :default-implementation t)
-  ( x y )
+    ( (x "")
+      (y "") )
   (- x y))
 
+
+;;;;
+;;;; Removes a concept from the concepts package as well as
+;;;; from the current package usign unintern
+(defun purge-concept (concept-name)
+  (do-symbols (s *concepts-package*)
+    (let ((pos (search (concatenate 'string (symbol-name concept-name) "[")
+		      (symbol-name s))))
+      (if (or (and pos (= 0 pos))
+	      (equal (symbol-name concept-name)
+		     (symbol-name s)))
+	  (unintern s *concepts-package*))))
+  (let ((concept-list (find-symbol (symbol-name '+CONCEPT-LIST+) *concepts-package*)))
+    (when concept-list
+      (setf (symbol-value concept-list)
+	    (remove-if #'(lambda (c)
+			   (equal (symbol-name c)
+				  (symbol-name concept-name)))
+		       (symbol-value concept-list)))))
+  (unintern (intern (symbol-name concept-name)))
+  (unintern (intern (concatenate 'string
+				 (symbol-name concept-name)
+				 "-IMPL")))
+  (unintern (intern (concatenate 'string
+				 (symbol-name concept-name)
+				 "-IMPLEMENTATON-TAG"))))
+  
 
 
 ;;;;
