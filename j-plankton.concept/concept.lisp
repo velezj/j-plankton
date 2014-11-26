@@ -92,7 +92,7 @@
 ;;;; aux-param-specs = ( bind-name keyword given-p lambda-spec doc-string)
 ;;;; rest-param-specs = ( name doc-string ) | nil
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun %parse-documented-lambda-list (lambda-list)
+  (defun %parse-documented-lambda-list (lambda-list &key (error-on-missing-doc t))
     
     ;; find the locations of each of the lambda keywords
     ;; and grab the ordinary, special (key and aux) and rest args
@@ -135,11 +135,31 @@
 	
 	;; make sure that each element is a list and that
 	;; the last element is a string
-	(mapcar #'(lambda (e)
-		    (check-type e list)
-		    (assert (> (length e) 1) (e) "You *must* supply a documentation string")
-		    (check-type (car (last e)) string))
-		(append ordinary-args optional-args rest-args special-args))
+	(when error-on-missing-doc
+	  (mapcar #'(lambda (e)
+		      (check-type e list)
+		      (assert (> (length e) 1) (e) "You *must* supply a documentation string")
+		      (check-type (car (last e)) string))
+		  (append ordinary-args optional-args rest-args special-args)))
+	;; ensure formatted even if missing docs, but warn
+	(flet ((fix-broken-arg (arg)
+		 (let ((a (alexandria:ensure-list arg)))
+		   (when (not (listp arg))
+		     (warn "non-list element in documented-lamba list, ensuring list: ~S -> ~S" arg a))
+		   (when (< (length a) 2)
+		     (setf a (append a (list "")))
+		     (warn "doc-less element in documented-lambda list, adding empty doc string: ~S -> ~S" arg a))
+		   (when (not (stringp (car (last a))))
+		     (let ((b a))
+		       (setf a (append a (list "")))
+		       (warn "final element of documented-lambda list argumet not a doc string, adding empty doc string: ~S -> ~S" b a)))
+		   a)))
+	  (setf 
+	   ordinary-args (mapcar #'fix-broken-arg ordinary-args)
+	   optional-args (mapcar #'fix-broken-arg optional-args)
+	   rest-args (mapcar #'fix-broken-arg rest-args)
+	   special-args (mapcar #'fix-broken-arg special-args)))
+	
 	
 	(list :positional (append ordinary-args optional-args)
 	      :named special-args
@@ -204,23 +224,25 @@
 ;;;; Given a documented lambda list, returns a list of how one should
 ;;;; forward the arguments of the lambda list
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun %extract-arguments-from-documented-lambda-list (doc-lambda-list)
+  (defun %extract-arguments-from-documented-lambda-list (doc-lambda-list &key (error-on-missing-doc t))
     (alexandria:flatten 
      (mapcar #'(lambda (norm-arg)
 		 (getf norm-arg :var-forward))
 	     (%normalize-parsed-documented-lambda-list
 	      (%parse-documented-lambda-list 
-	       doc-lambda-list))))))
+	       doc-lambda-list
+	       :error-on-missing-doc error-on-missing-doc))))))
 
 
 ;;;;
 ;;;; Given a documetned lambda list, returns a plain lambda list for it
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun %documented-lambda-list-to-lambda-list (doc-lambda-list)
+  (defun %documented-lambda-list-to-lambda-list (doc-lambda-list &key (error-on-missing-doc t))
     (let* ((norm-args
 	     (%normalize-parsed-documented-lambda-list
 	      (%parse-documented-lambda-list 
-	       doc-lambda-list)))
+	       doc-lambda-list
+	       :error-on-missing-doc error-on-missing-doc)))
 	   (positional 
 	     (alexandria:mappend 
 	      #'(lambda (norm-arg)
@@ -414,7 +436,7 @@
 ;;;; if not already there (with + around it)
 (defmacro implement-concept ( (concept-name implementation-tag doc &key (default-implementation nil)) documented-lambda-list &body body )
   (let ((method-name (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
-	(normal-lambda-args (%documented-lambda-list-to-lambda-list documented-lambda-list)))
+	(normal-lambda-args (%documented-lambda-list-to-lambda-list documented-lambda-list :error-on-missing-doc nil)))
     (let* ((implementation-tag-+ (concatenate 'string "+" (symbol-name implementation-tag) "+"))
 	   (implementation-tag-symbol 
 	    (find-or-make-implementation-tag implementation-tag-+ (symbol-name concept-name) doc))
@@ -438,8 +460,7 @@
 
 (implement-concept 
     (foobar impl-generic "GENERIC foobar implementation" :default-implementation t)
-  ( (x "") 
-    (y "") )
+  ( x y )
   (- x y))
 
 
