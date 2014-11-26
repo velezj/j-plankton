@@ -342,6 +342,30 @@
 	    (remove-if #'(lambda (norm-arg)
 			   (eq :other (getf norm-arg :type)))
 		       norm-args))))
+
+
+;;;;
+;;;; Returns the argument symbols in a documented-lambda list.
+;;;; This is different than the fowarding arguments since we do not
+;;;; what hte keywords, just the argument symbols
+(defun %documented-lambda-list-argument-symbols (doc-lambda-list &key (error-on-missing-doc t))
+  (let ((norm-args
+	  (%normalize-parsed-documented-lambda-list
+	   (%parse-documented-lambda-list
+	    doc-lambda-list
+	    :error-on-missing-doc error-on-missing-doc))))
+    (mapcar #'(lambda (norm-arg)
+		(elt 
+		 (alexandria:ensure-list
+		  (car
+		   (getf norm-arg :lambda-list-foward)))
+		 0))
+	    (remove-if #'(lambda (norm-arg)
+			   (eq :other (getf norm-arg :type)))
+		       norm-args))))
+
+
+
 ;;;;
 ;;;; Creates a symbol based on a concept and the typed arguments given 
 ;;;; to it
@@ -353,7 +377,7 @@
 			 (mapcar #'(lambda (type)
 				     (concatenate 'string
 						  "["
-						  (symbol-name type)
+						  (format nil "~S" type)
 						  "]"))
 				 arg-types))
 		  package)))
@@ -411,13 +435,15 @@
 			   (find-symbol 
 			    (symbol-name 
 			     (%create-concept-symbol ',concept-name
-						     ',(%documented-lambda-list-argument-types concept-args)))
+						     (mapcar #'type-of (list ,@(%documented-lambda-list-argument-symbols concept-args)))))
 			     *concepts-package*)))
 		     (if (and concept-symbol (boundp concept-symbol))
-			 concept-symbol
+			 (values (symbol-value concept-symbol)
+				 concept-symbol)
 			 (if (next-method-p)
 			     (call-next-method)
-			     ,concept-symbol))))
+			     (values (format nil "** ~A" ,concept-symbol)
+				     ,concept-symbol)))))
 		 (defmethod ,concept-method ( ,@(%documented-lambda-list-to-lambda-list concept-args) )
 		   (,concept-method-impl (,concept-implementation-tag ,@(%extract-arguments-from-documented-lambda-list concept-args)) ,@(%extract-arguments-from-documented-lambda-list concept-args)))
 		 ;; print to the user
