@@ -370,18 +370,21 @@
 ;;;; Creates a symbol based on a concept and the typed arguments given 
 ;;;; to it
 (defun %create-concept-symbol (concept-name arg-types &optional (package *concepts-package*) )
-  (let ((s 
-	  (intern (apply #'concatenate 
-			 'string 
-			 (symbol-name concept-name)
+  (multiple-value-bind (s present-already) 
+      (intern (apply #'concatenate 
+		     'string 
+		     (symbol-name concept-name)
+		     (if (every #'(lambda (type) (eq type 't)) arg-types)
+			 nil
 			 (mapcar #'(lambda (type)
 				     (concatenate 'string
 						  "["
 						  (format nil "~S" type)
 						  "]"))
-				 arg-types))
-		  package)))
-    (setf (symbol-value s) +UNSET-IMPLEMENTATION-TAG+)
+				 arg-types)))
+	      package)
+    (when (not present-already)
+      (setf (symbol-value s) +UNSET-IMPLEMENTATION-TAG+))
     s))
 		       
 		       
@@ -517,7 +520,8 @@
   (let ((method-name (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
 	(normal-lambda-args (%documented-lambda-list-to-lambda-list documented-lambda-list :error-on-missing-doc nil))
 	(concept-symbol (%create-concept-symbol concept-name 
-						(%documented-lambda-list-argument-types documented-lambda-list :error-on-missing-doc nil))))
+						(%documented-lambda-list-argument-types documented-lambda-list :error-on-missing-doc nil)))
+	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG"))))
     (let* ((implementation-tag-+ (concatenate 'string "+" (symbol-name implementation-tag) "+"))
 	   (implementation-tag-symbol 
 	    (find-or-make-implementation-tag implementation-tag-+ (symbol-name concept-name) doc))
@@ -529,7 +533,21 @@
 	(setf (symbol-value concept-symbol)
 	      implementation-tag-symbol))
       `(progn
-	   
+	 (defmethod ,concept-implementation-tag ( ,@(%documented-lambda-list-to-lambda-list documented-lambda-list) )
+	   (let ((concept-symbol
+		  (find-symbol 
+		   (symbol-name 
+		    (%create-concept-symbol
+		     ',concept-name
+		     ',(%documented-lambda-list-argument-types documented-lambda-list)))
+		   *concepts-package*)))
+	     (if (and concept-symbol (boundp concept-symbol))
+		 (values (symbol-value concept-symbol)
+			 concept-symbol)
+		 (if (next-method-p)
+		     (call-next-method)
+		     (values (format nil "** ~A" ,concept-symbol)
+			     ,concept-symbol)))))
 	 (define-concept-method-impl ,method-name (,concept-check ,@normal-lambda-args) ,@body)))))
 
 
