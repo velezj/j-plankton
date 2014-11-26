@@ -151,7 +151,7 @@
 ;;;; Returns the head of hte list, all but the last element
 (defun all-but-last (list)
   (subseq list 0 (1- (length list))))
-    
+
 
 ;;;;
 ;;;; "normalizes" arguments from the result of parsing a documented lambda list
@@ -176,10 +176,8 @@
 	     (getf parsed-doc-ll :positional))
      (mapcar #'(lambda (named-arg)
 		 (let ((name
-			;(if (> (length named-arg) 2)
-			;    (elt named-arg 1)
-			    (intern (symbol-name (elt named-arg 0)) 
-				    (find-package "KEYWORD"))))
+			 (intern (symbol-name (elt named-arg 0)) 
+				 (find-package "KEYWORD"))))
 		   (list :var-forward (list name (elt named-arg 0))
 			 :lambda-list-foward (list (all-but-last named-arg))
 			 :doc (car (last named-arg))
@@ -258,7 +256,7 @@
       (append positional 
 	      (when rest (list '&rest (caar rest)))
 	      (when named (list '&key)) named
-	      others)))
+	      others))))
   
   
 ;;;;
@@ -434,12 +432,14 @@
 ;;;; Some test concept implementations
 (implement-concept 
     (foobar impl-fast "FAST foobar implementation")
-  (x y)
+  ( (x "") 
+    (y "") ) 
   (+ x y))
 
 (implement-concept 
     (foobar impl-generic "GENERIC foobar implementation" :default-implementation t)
-  (x y)
+  ( (x "") 
+    (y "") )
   (- x y))
 
 
