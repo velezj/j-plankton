@@ -21,15 +21,19 @@
 ;;;; the kewrod package or not
 (defun is-in-keyword-package (k)
   (and (symbolp k)
-       (find-symbol (symbol-name k) (find-package "KEYWORD")))) 
-
+       (equal
+	(symbol-package k)
+	(symbol-package ':a))))
 
 ;;;;
 ;;;; Creates a 'standard' assoc from a list using the sassoc concept 
 ;;;; of keys.
 ;;;; By default, keywords are the only keys, but this can be changed
 ;;;; by giving the key predicate function
-(defun parse-sassoc-to-alist (property-list &key (is-key #'is-in-keyword-package) (default-key nil) (test #'eql))
+(defun parse-sassoc-to-alist (property-list 
+			      &key 
+				(is-key #'is-in-keyword-package) 
+				(default-key nil))
   (let ((current-key default-key)
 	(alist nil))
     (dolist (e property-list)
@@ -39,16 +43,14 @@
 	    (push (cons e nil) alist))
 	  (if (null alist)
 	      (push (cons default-key (list e)) alist)
-	      (setf alist 
-		    (mapcar 
-		     #'(lambda (ale)
-			 (destructuring-bind (k . v) ale
-			   (if (funcall test k current-key)
-			       (if (null v)
-				   (cons k (list e))
-				   (cons k (cons e v)))
-			       ale)))
-		     alist)))))
+	      (setf alist
+		    (cons
+		     (cons
+		      (car (car alist))
+		      (cons e
+			    (cdr (car alist))))
+		     (cdr alist))))))
+    ;; rever both the associations and the alist itself
     (mapcar #'(lambda (ale)
 		(destructuring-bind (k . v) ale
 		  (cons k (reverse v))))
