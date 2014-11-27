@@ -73,35 +73,40 @@
 
 ;;;;
 ;;;; Creates a symbol based on a concept and the typed arguments given 
-;;;; to it
-(defun %create-concept-symbol (concept-name arg-types &optional (package *concepts-package*) )
-  (multiple-value-bind (s present-already) 
-      (intern (apply #'concatenate 
-		     'string 
-		     (symbol-name concept-name)
-		     (if (every #'(lambda (type) (eq type 't)) arg-types)
-			 nil
-			 (mapcar #'(lambda (type)
-				     (concatenate 'string
-						  "["
-						  (format nil "~S" type)
-						  "]"))
-				 arg-types)))
-	      package)
-    (when (not present-already)
-      (setf (symbol-value s) +UNSET-IMPLEMENTATION-TAG+))
-    s))
+;;;; to it.
+;;;; If the symbol already exists, return it instead of creating it.
+;;;; If created, sets the value ot +UNSET-IMPLEMENTATION-TAG+
+;;;; Returns (value symbol second-intern-value)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun %create-concept-symbol (concept-name arg-types &optional (package *concepts-package*) )
+    (multiple-value-bind (s present-already) 
+	(intern (apply #'concatenate 
+		       'string 
+		       (symbol-name concept-name)
+		       (if (every #'(lambda (type) (eq type 't)) arg-types)
+			   nil
+			   (mapcar #'(lambda (type)
+				       (concatenate 'string
+						    "["
+						    (format nil "~S" type)
+						    "]"))
+				   arg-types)))
+		package)
+      (when (not present-already)
+	(setf (symbol-value s) +UNSET-IMPLEMENTATION-TAG+))
+    s)))
 		       
 		       
 
 	
 ;;;; 
 ;;;; A special symbol meaning that a concept has an unset implementation tag
-(eval-when (:compile-toplevel)
-  (defconstant +UNSET-IMPLEMENTATION-TAG+ (gensym "unset-impl-")
-    "Special symbol denoting an unset implementation tag.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (when (not (boundp '+UNSET-IMPLEMENTATION-TAG+))
+    (defconstant +UNSET-IMPLEMENTATION-TAG+ (gensym "unset-impl-")
+      "Special symbol denoting an unset implementation tag.
    This is the default value for all defined concepts initially
-   unless changed by a call to implement-concept"))
+   unless changed by a call to implement-concept")))
   
 ;;;;
 ;;;; Define a particular concept
