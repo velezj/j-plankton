@@ -115,7 +115,8 @@
 (defmacro define-concept (concept-name concept-args doc &key (package *concepts-package*) (error-when-duplicate-concept t))
   (let ((concept-method (intern (concatenate 'string (symbol-name concept-name) "")))
 	(concept-method-impl (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
-	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG"))))
+	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG")))
+	(concept-implementation-tag-setter (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG-SETTER"))))
     (with-concepts-package package
       (if (and (find-symbol (symbol-name concept-name) *concepts-package*)
 	       error-when-duplicate-concept)
@@ -143,6 +144,8 @@
 		   (:documentation ,doc))
 		 (defgeneric ,concept-implementation-tag ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
 		   (:documentation "retrieves the current implementation tag for a concept (based on types used to callthe concept!)"))
+		 (defgeneric ,concept-implementation-tag-setter ( new-tag ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		   (:documentation "sets the current implementation tag for a concept (based on types used to call the concept!)"))
 		 (defmethod ,concept-implementation-tag ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
 		   (let ((concept-symbol
 			   (find-symbol 
@@ -157,10 +160,16 @@
 			     (call-next-method)
 			     (values (format nil "** ~A" ,concept-symbol)
 				     ,concept-symbol)))))
+		 (defmethod ,concept-implementation-tag-setter  ( new-tag ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		   (let ((concept-symbol
+			   (find-symbol 
+			    (symbol-name 
+			     (%create-concept-symbol ',concept-name
+						     (mapcar #'type-of (list ,@(jp.doc-ll:documented-lambda-list-argument-symbols concept-args)))))
+			    *concepts-package*)))
+		     (setf (symbol-value concept-symbol) new-tag)))
 		 (defmethod ,concept-method ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
-		   (,concept-method-impl (,concept-implementation-tag ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)) ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)))
-		 ;; print to the user
-		 (format t "created new concept ~A~%" ',concept-symbol))))))))
+		   (,concept-method-impl (,concept-implementation-tag ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)) ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args))))))))))
   
   
 
@@ -209,6 +218,13 @@
 				     (format nil "Implementation ~A: " implementation-tag)
 				     doc))
 					;(format t "set doc of ~A (VARIABLE) to ~A~%" concept (documentation concept 'VARIABLE))
+		  (let ((tags (intern (symbol-name '+implementations-tags+) *concepts-package*)))
+		    (if (boundp tags)
+			(setf (symbol-value tags)
+			      (pushnew s (symbol-value tags)))
+			(setf (symbol-value tags)
+			      (list s))))
+		  
 		  s)))))))
 	    
   
@@ -231,7 +247,8 @@
 	(normal-lambda-args (jp.doc-ll:documented-lambda-list->lambda-list documented-lambda-list :error-on-missing-doc nil))
 	(concept-symbol (%create-concept-symbol concept-name 
 						(jp.doc-ll:documented-lambda-list-argument-types documented-lambda-list :error-on-missing-doc nil)))
-	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG"))))
+	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG")))
+	(concept-implementation-tag-setter (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG-SETTER"))))
     (let* ((implementation-tag-+ (concatenate 'string "+" (symbol-name implementation-tag) "+"))
 	   (implementation-tag-symbol 
 	    (find-or-make-implementation-tag implementation-tag-+ (symbol-name concept-name) doc))
@@ -261,6 +278,14 @@
 		     (call-next-method)
 		     (values (format nil "** ~A" ,concept-symbol)
 			     ,concept-symbol)))))
+	 (defmethod ,concept-implementation-tag-setter  ( new-tag ,@(jp.doc-ll:documented-lambda-list->lambda-list documented-lambda-list) )
+	   (let ((concept-symbol
+		   (find-symbol 
+		    (symbol-name 
+		     (%create-concept-symbol ',concept-name
+					     (mapcar #'type-of (list ,@(jp.doc-ll:documented-lambda-list-argument-symbols documented-lambda-list)))))
+		    *concepts-package*)))
+	     (setf (symbol-value concept-symbol) new-tag)))
 	 (define-concept-method-impl ,method-name (,concept-check ,@normal-lambda-args) ,@body)))))
 
 
@@ -277,6 +302,54 @@
     ( (x "")
       (y "") )
   (- x y))
+
+
+
+;;;;
+;;;; Returns the currently set implementation tag for a concept when called
+;;;; with the givne arguments
+(defun concept-implementation-tag (concept-symbol 
+				   &rest concept-args)
+  (let* ((method-name
+	  (concatenate 'string
+		       (symbol-name concept-symbol)
+		       "-IMPLEMENTATON-TAG"))
+	 (method-symbol (find-symbol method-name))
+	 (method (if (and method-symbol (fboundp method-symbol))
+		     (symbol-function method-symbol)
+		     nil)))
+    (unless method
+      (error "Cannot find concept-specific implementation tag method for concept  ~A.  Symbol named ~S either not found or not fboundp!"
+	     concept-symbol
+	     method-name))
+    (apply method concept-args)))
+
+
+;;;;
+;;;; Set the implementation tag for a concept when called with given
+;;;; arguments.
+(defun %set-concept-implementation-tag (concept-symbol 
+					&rest concept-args-and-new-tag)
+  (let* ((method-name
+	   (concatenate 'string
+			(symbol-name concept-symbol)
+			"-IMPLEMENTATON-TAG-SETTER"))
+	 (method-symbol (find-symbol method-name))
+	 (method (if (and method-symbol (fboundp method-symbol))
+		     (symbol-function method-symbol)
+		     nil)))
+    (unless method
+      (error "Cannot find concept-specific implementation tag setter method for concept  ~A.  Symbol named ~S either not found or not fboundp!"
+	     concept-symbol
+	     method-name))
+    (apply method concept-args-and-new-tag)))
+
+
+;;;;
+;;;; a setf expander for:
+;;;; (setf (concept-implementation-tag <concept> <args> ) <tag> )
+(defsetf concept-implementation-tag %set-concept-implementation-tag)
+    
 
 
 ;;;;
@@ -306,21 +379,39 @@
 				 "-IMPLEMENTATON-TAG"))))
   
 
+;;;;
+;;;; purge all the known concepts (those stored in +CONCEPT-LIST+)
+(defun purge-all-concepts ()
+  (dolist (s (symbol-value (find-symbol (symbol-name '+CONCEPT-LIST+) *concepts-package*)))
+    (purge-concept s)))
+
+
+;;;;
+;;;; purge all symbols in the concepts package
+(defun purge-concepts-package ()
+  (do-symbols (s *concepts-package*)
+    (unintern s *concepts-package*)))
+
 
 ;;;;
 ;;;; Print out a list of current concepts known about
-(defun print-concepts (&key (package *concepts-package*) (print-doc nil))
-  (do-symbols (s package)
-    (unless (equal (elt (symbol-name s) 0) #\+)
-      (format t "~A::~A  set to ~A~%" (package-name package) s (symbol-value s))
-      (when print-doc
-	(format t "     ~A~%" (documentation s 'VARIABLE))))))
+(defun print-concepts (&key (print-doc nil))
+  (let ((tags (find-symbol (symbol-name '+concept-list+) *concepts-package*)))
+    (if (not tags)
+	nil
+	(dolist (s (symbol-value tags))
+	  (format t "~A::~A  set to ~A~%" (package-name *concepts-package*) s (symbol-value s))
+	  (when print-doc
+	    (format t "     ~A~%" (documentation s 'VARIABLE)))))))
 
+  
 ;;;;
 ;;;; Print out a list of current implementation tags known about
-(defun print-implementation-tags (&key (package *concepts-package*) (print-doc nil))
-  (do-symbols (s package)
-    (when (equal (elt (symbol-name s) 0) #\+)
-      (format t "~A::~A~%" (package-name package) s)
-      (when print-doc
-	(format t "     ~A~%" (documentation s 'VARIABLE))))))
+(defun print-implementation-tags (&key (print-doc nil))
+  (let ((tags (find-symbol (symbol-name '+implementations-tags+) *concepts-package*)))
+    (if (not tags)
+	nil
+	(dolist (s (symbol-value tags))
+	  (format t "~A::~A~%" (package-name *concepts-package*) s)
+	  (when print-doc
+	    (format t "     ~A~%" (documentation s 'VARIABLE)))))))
