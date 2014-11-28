@@ -165,7 +165,7 @@
 			   (find-symbol 
 			    (symbol-name 
 			     (%create-concept-symbol ',concept-name
-						     (mapcar #'type-of (list ,@(jp.doc-ll:documented-lambda-list-argument-symbols concept-args)))))
+						     ',(jp.doc-ll:documented-lambda-list-argument-symbols concept-args)))
 			    *concepts-package*)))
 		     (setf (symbol-value concept-symbol) new-tag)))
 		 (defmethod ,concept-method ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
@@ -283,7 +283,7 @@
 		   (find-symbol 
 		    (symbol-name 
 		     (%create-concept-symbol ',concept-name
-					     (mapcar #'type-of (list ,@(jp.doc-ll:documented-lambda-list-argument-symbols documented-lambda-list)))))
+					     ',(jp.doc-ll:documented-lambda-list-argument-types documented-lambda-list)))
 		    *concepts-package*)))
 	     (setf (symbol-value concept-symbol) new-tag)))
 	 (define-concept-method-impl ,method-name (,concept-check ,@normal-lambda-args) ,@body)))))
@@ -330,7 +330,15 @@
 ;;;; arguments.
 (defun %set-concept-implementation-tag (concept-symbol 
 					&rest concept-args-and-new-tag)
-  (let* ((method-name
+  (let* ((concept-args (subseq concept-args-and-new-tag 0 (1- (length concept-args-and-new-tag))))
+	 (new-tag (car (last concept-args-and-new-tag)))
+	 (new-tag-symbol-in-package
+	   (intern (concatenate 'string 
+				"+"
+				(symbol-name new-tag)
+				"+")
+		   *concepts-package*))
+	 (method-name
 	   (concatenate 'string
 			(symbol-name concept-symbol)
 			"-IMPLEMENTATON-TAG-SETTER"))
@@ -342,7 +350,7 @@
       (error "Cannot find concept-specific implementation tag setter method for concept  ~A.  Symbol named ~S either not found or not fboundp!"
 	     concept-symbol
 	     method-name))
-    (apply method concept-args-and-new-tag)))
+    (apply method new-tag-symbol-in-package concept-args)))
 
 
 ;;;;
