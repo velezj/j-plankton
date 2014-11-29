@@ -7,5 +7,6 @@
 	       (:file "hash")
 	       (:file "sort")
 	       (:file "split")
-	       (:file "sassoc")))
+	       (:file "sassoc")
+	       (:file "intern+")))
 	       

@@ -39,5 +39,7 @@
    #:multiple-split
 
    #:parse-sassoc-to-alist
+
+   #:intern+
    ))
 
