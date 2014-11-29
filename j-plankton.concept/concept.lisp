@@ -132,7 +132,7 @@
 	      (setf (symbol-value concept-symbol) +UNSET-IMPLEMENTATION-TAG+)
 	      ;; create the concept list in package if needed
 	      (if (not (find-symbol (symbol-name '+concept-list+) *concepts-package*))
-		  (let ((concept-list (intern *concepts-package* '+concept-list+)))
+		  (let ((concept-list (jpu:intern+ *concepts-package* '+concept-list+)))
 		    (setf (symbol-value concept-list) nil)))
 	      ;; add new symbol (concept) to the concept list
 	      (pushnew concept-symbol (symbol-value (find-symbol (symbol-name '+concept-list+) *concepts-package*)))
@@ -242,17 +242,35 @@
 ;;;; the implementation tag.
 ;;;; The implementation tag will be added to the current *concepts-package*
 ;;;; if not already there (with + around it)
-(defmacro implement-concept ( (concept-name implementation-tag doc &key (default-implementation nil)) documented-lambda-list &body body )
-  (let ((method-name (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
-	(normal-lambda-args (jp.doc-ll:documented-lambda-list->lambda-list documented-lambda-list :error-on-missing-doc nil))
-	(concept-symbol (%create-concept-symbol concept-name 
-						(jp.doc-ll:documented-lambda-list-argument-types documented-lambda-list :error-on-missing-doc nil)))
-	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG")))
-	(concept-implementation-tag-setter (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG-SETTER"))))
-    (let* ((implementation-tag-+ (concatenate 'string "+" (symbol-name implementation-tag) "+"))
+(defmacro implement-concept (   (concept-name implementation-tag doc 
+				 &key (default-implementation nil)) 
+				documented-lambda-list 
+			     &body body )
+  (let ((method-name (jpu:intern+ *concepts-package* concept-name '-impl))
+	(normal-lambda-args (jp.doc-ll:documented-lambda-list->lambda-list 
+			     documented-lambda-list 
+			     :error-on-missing-doc nil))
+	(concept-symbol (%create-concept-symbol 
+			 concept-name 
+			 (jp.doc-ll:documented-lambda-list-argument-types 
+			  documented-lambda-list 
+			  :error-on-missing-doc nil)))
+	(concept-implementation-tag (jpu:intern+ *concepts-package* 
+						 concept-name 
+						 '-implementation-tag))
+	(concept-implementation-tag-setter 
+	  (jpu:intern+ *concepts-package* 
+		       concept-name
+		       '-implementation-tag-setter)))
+    (let* ((implementation-tag-+ (concatenate 'string 
+					      "+" 
+					      (symbol-name implementation-tag) 
+					      "+"))
 	   (implementation-tag-symbol 
-	    (find-or-make-implementation-tag implementation-tag-+ (symbol-name concept-name) doc))
-	   (concept-check (list (gensym "concept-var-") `(eql ',implementation-tag-symbol))))
+	     (find-or-make-implementation-tag implementation-tag-+ 
+					      (symbol-name concept-name) doc))
+	   (concept-check (list (gensym "concept-var-") 
+				`(eql ',implementation-tag-symbol))))
       (when (and 
 	     (eq (symbol-value concept-symbol)
 		 +UNSET-IMPLEMENTATION-TAG+)
@@ -314,7 +332,7 @@
 	  (concatenate 'string
 		       (symbol-name concept-symbol)
 		       "-IMPLEMENTATON-TAG"))
-	 (method-symbol (find-symbol method-name))
+	 (method-symbol (find-symbol method-name *concepts-package*))
 	 (method (if (and method-symbol (fboundp method-symbol))
 		     (symbol-function method-symbol)
 		     nil)))
@@ -333,16 +351,12 @@
   (let* ((concept-args (subseq concept-args-and-new-tag 0 (1- (length concept-args-and-new-tag))))
 	 (new-tag (car (last concept-args-and-new-tag)))
 	 (new-tag-symbol-in-package
-	   (intern (concatenate 'string 
-				"+"
-				(symbol-name new-tag)
-				"+")
-		   *concepts-package*))
+	   (jpu:intern+ *concepts-package* "+" new-tag "+"))
 	 (method-name
 	   (concatenate 'string
 			(symbol-name concept-symbol)
 			"-IMPLEMENTATON-TAG-SETTER"))
-	 (method-symbol (find-symbol method-name))
+	 (method-symbol (find-symbol method-name *concepts-package*))
 	 (method (if (and method-symbol (fboundp method-symbol))
 		     (symbol-function method-symbol)
 		     nil)))
@@ -381,10 +395,12 @@
   (unintern (intern (symbol-name concept-name)))
   (unintern (intern (concatenate 'string
 				 (symbol-name concept-name)
-				 "-IMPL")))
+				 "-IMPL"))
+	    *concepts-package*)
   (unintern (intern (concatenate 'string
 				 (symbol-name concept-name)
-				 "-IMPLEMENTATON-TAG"))))
+				 "-IMPLEMENTATON-TAG"))
+	    *concepts-package*))
   
 
 ;;;;
