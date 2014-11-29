@@ -47,7 +47,7 @@
 ;;;;
 ;;;; This is the currently bound concept's package
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *concepts-package* (make-package (symbol-name :default-concepts))))
+  (defvar *concepts-package* (make-package (symbol-name (gensym (symbol-name :default-concepts))))))
 
 
 ;;;;
@@ -96,7 +96,7 @@
 	(setf (symbol-value s) +UNSET-IMPLEMENTATION-TAG+))
     s)))
 		       
-		       
+
 
 	
 ;;;; 
@@ -113,17 +113,17 @@
 ;;;; This just makes it's name available in the current concepts package
 ;;;; (or the given concepts package, defautls ot current)
 (defmacro define-concept (concept-name concept-args doc &key (package *concepts-package*) (error-when-duplicate-concept t))
-  (let ((concept-method (intern (concatenate 'string (symbol-name concept-name) "")))
-	(concept-method-impl (intern (concatenate 'string (symbol-name concept-name) "-IMPL")))
-	(concept-implementation-tag (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG")))
-	(concept-implementation-tag-setter (intern (concatenate 'string (symbol-name concept-name) "-IMPLEMENTATON-TAG-SETTER"))))
+  (let ((concept-method (jpu:intern+ *package* concept-name))
+	(concept-method-impl (jpu:intern+ package concept-name '-impl))
+	(concept-implementation-tag (jpu:intern+ package concept-name '-implementation-tag))
+	(concept-implementation-tag-setter (jpu:intern+ package concept-name '-implementation-tag-setter)))
     (with-concepts-package package
       (if (and (find-symbol (symbol-name concept-name) *concepts-package*)
 	       error-when-duplicate-concept)
 	  (error "The symbol ~A is already bound in the concepts package ~A" concept-name *concepts-package*)
 	  (progn
 	    ;; intern the symbol and declaim it special
-	    (let ((concept-symbol (intern (symbol-name concept-name) *concepts-package*)))
+	    (let ((concept-symbol (jpu:intern+ *concepts-package* concept-name)))
 	      (eval-when (:compile-toplevel)
 		(proclaim `(special ,concept-symbol)))
 	      (eval-when (:load-toplevel :execute)
@@ -132,7 +132,7 @@
 	      (setf (symbol-value concept-symbol) +UNSET-IMPLEMENTATION-TAG+)
 	      ;; create the concept list in package if needed
 	      (if (not (find-symbol (symbol-name '+concept-list+) *concepts-package*))
-		  (let ((concept-list (intern (symbol-name '+concept-list+) *concepts-package*)))
+		  (let ((concept-list (intern *concepts-package* '+concept-list+)))
 		    (setf (symbol-value concept-list) nil)))
 	      ;; add new symbol (concept) to the concept list
 	      (pushnew concept-symbol (symbol-value (find-symbol (symbol-name '+concept-list+) *concepts-package*)))
