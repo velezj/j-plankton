@@ -34,3 +34,33 @@
 
 
 ;;=========================================================================
+
+;;;;
+;;;; Define a concept for retrieving the set of 'labels' which are part
+;;;; of *any* element of a data-frame (or object that behaves like one)
+;;;; Labels are of any type (thought usually symbols).
+;;;; Inherent integer indices are not consideres 'labels'
+(define-concept
+    label-set 
+  ( (object "a data-frame of data-frame-like object which has a potential to
+             have labeled elements inside it")
+    &key
+    (scope "What 'scope' of labels do be include.  This is a list which may
+            include any of the following scopes:
+               :global = global labels only (exist for logical sets of elements)
+               :local  = local labels (exist for individual elements)
+               :dimensional = labes exists for dimensions of the data-frame
+               :all --> same as (:global :local :dimensional)") )
+  "Returns a set of label objects of the given scope for the data-frame
+   (or data-frame-like) object.  The ordering is non-specific (hence a set).
+   Usually labels are symbols, but they can be any type.
+   Inherent integer indices are not considered labels and are not retuned")
+
+             
+
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
