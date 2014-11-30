@@ -1,7 +1,6 @@
 ;;;; package.lisp
 
 (defpackage #:j-plankton.concept
-  (:nicknames #:jp)
   (:use #:cl)
   (:export
    #:*concepts-package*

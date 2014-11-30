@@ -174,15 +174,15 @@
   
   
 
-;;;;
-;;;; Some test defined concepts!       
-(define-concept foobar ( (x "") 
-			 (y "")) 
-  "The FOOBAR concept")
-(define-concept foobar ( (x "Some X argument")
-			 (y "Some Y argument, >0")) 
-  "The NEW foobar concept" 
-  :error-when-duplicate-concept nil)
+;; ;;;;
+;; ;;;; Some test defined concepts!       
+;; (define-concept foobar ( (x "") 
+;; 			 (y "")) 
+;;   "The FOOBAR concept")
+;; (define-concept foobar ( (x "Some X argument")
+;; 			 (y "Some Y argument, >0")) 
+;;   "The NEW foobar concept" 
+;;   :error-when-duplicate-concept nil)
 
 
 ;;;;
@@ -309,19 +309,19 @@
 	   (define-concept-method-impl ,method-name (,concept-check ,@normal-lambda-args) ,@body))))))
   
   
-;;;;
-;;;; Some test concept implementations
-(implement-concept 
-    (foobar impl-integer "FAST foobar implementation")
-  ( ((x integer) "") 
-    ((y integer) "") ) 
-  (+ x y))
+;; ;;;;
+;; ;;;; Some test concept implementations
+;; (implement-concept 
+;;     (foobar impl-integer "FAST foobar implementation")
+;;   ( ((x integer) "") 
+;;     ((y integer) "") ) 
+;;   (+ x y))
 
-(implement-concept 
-    (foobar impl-generic "GENERIC foobar implementation" :default-implementation t)
-    ( (x "")
-      (y "") )
-  (- x y))
+;; (implement-concept 
+;;     (foobar impl-generic "GENERIC foobar implementation" :default-implementation t)
+;;     ( (x "")
+;;       (y "") )
+;;   (- x y))
 
 
 
