@@ -98,6 +98,55 @@
 		       
 
 
+;;;;
+;;;; Givne a normalize argumnet from a documented-lambda-list, reutrns
+;;;; a pretty documentation string for the arg
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun %norm-arg-pretty-doc (norm-arg)
+    (concatenate 'string
+		 (case (getf norm-arg :type)
+		   (:positional
+		    (format nil "~A : ~A"
+			    (getf norm-arg :var-forward)
+			    (getf norm-arg :doc)))
+		   (:rest
+		    (format nil "&rest ~A : ~A"
+			    (getf norm-arg :var-forward)
+			    (getf norm-arg :doc)))
+		   (:other
+		    (format nil "<OTHER> ~A"
+			    (getf norm-arg :original)))
+		   (:named
+		    (format nil "&key/&aux ~S : ~A"
+			    (getf norm-arg :var-forward)
+			    (getf norm-arg :doc)))))))
+
+
+;;;;
+;;;; Given a concept-symbol, it's documented-lambda-list and the concept
+;;;; doc string, returns the full documentation string including the
+;;;; argument docs from hte documented-lambda-list
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun %generate-concept-doc (concept-symbol documented-lambda-list doc)
+    (let ((norm-args
+	    (jp.doc-ll:normalize-documented-lambda-list documented-lambda-list)))
+      (funcall #'concatenate 'string
+	     "CONCEPT:  "
+	     (symbol-name concept-symbol)
+	     (format nil "~%~%")
+	     (format nil "ARGUMENTS: ~%")
+	     (apply #'concatenate 'string 
+		    (mapcar #'(lambda (doc)
+				(concatenate 'string
+					     (string #\Tab)
+					     doc
+					     (string #\Newline)))
+			    (mapcar #'%norm-arg-pretty-doc norm-args)))
+	     (format nil "~%~%")
+	     (format nil "DOC: ~%")
+	     doc))))
+		     
+
 	
 ;;;; 
 ;;;; A special symbol meaning that a concept has an unset implementation tag
@@ -128,49 +177,57 @@
 		(proclaim `(special ,concept-symbol)))
 	      (eval-when (:load-toplevel :execute)
 		(proclaim `(special ,concept-symbol)))
-	      (setf (documentation concept-symbol 'VARIABLE) doc)
-	      (setf (symbol-value concept-symbol) +UNSET-IMPLEMENTATION-TAG+)
-	      ;; create the concept list in package if needed
-	      (if (not (find-symbol (symbol-name '+concept-list+) *concepts-package*))
-		  (let ((concept-list (jpu:intern+ *concepts-package* '+concept-list+)))
-		    (setf (symbol-value concept-list) nil)))
-	      ;; add new symbol (concept) to the concept list
-	      (pushnew concept-symbol (symbol-value (find-symbol (symbol-name '+concept-list+) *concepts-package*)))
-	      ;; create ne generic method for this concept
-	      `(progn
-		 (defgeneric ,concept-method ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) ) 
-		   (:documentation ,doc))
-		 (let ((*package* ,*concepts-package*))
-		   (defgeneric ,concept-method-impl ( +concept-impl+ ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+	      ;; create argument documentation and append to doc and set
+	      (let ((full-doc 
+		      (%generate-concept-doc 
+		       concept-symbol
+		       concept-args
+		       doc)))
+		(setf (documentation concept-symbol 'VARIABLE) full-doc)
+		;; set implementation-tag to initially unset
+		(setf (symbol-value concept-symbol) +UNSET-IMPLEMENTATION-TAG+)
+		;; create the concept list in package if needed
+		(if (not (find-symbol (symbol-name '+concept-list+) *concepts-package*))
+		    (let ((concept-list (jpu:intern+ *concepts-package* '+concept-list+)))
+		      (setf (symbol-value concept-list) nil)))
+		;; add new symbol (concept) to the concept list
+		(pushnew concept-symbol (symbol-value (find-symbol (symbol-name '+concept-list+) *concepts-package*)))
+		;; create ne generic method for this concept
+		`(progn
+		   (defgeneric ,concept-method ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) ) 
 		     (:documentation ,doc))
-		   (defgeneric ,concept-implementation-tag ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
-		     (:documentation "retrieves the current implementation tag for a concept (based on types used to callthe concept!)"))
-		   (defgeneric ,concept-implementation-tag-setter ( new-tag ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
-		     (:documentation "sets the current implementation tag for a concept (based on types used to call the concept!)"))
-		   (defmethod ,concept-implementation-tag ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
-		     (let ((concept-symbol
-			     (find-symbol 
-			      (symbol-name 
-			       (%create-concept-symbol ',concept-name
-						       (mapcar #'type-of (list ,@(jp.doc-ll:documented-lambda-list-argument-symbols concept-args)))))
-			      *concepts-package*)))
-		       (if (and concept-symbol (boundp concept-symbol))
-			   (values (symbol-value concept-symbol)
-				   concept-symbol)
-			   (if (next-method-p)
-			       (call-next-method)
-			       (values (format nil "** ~A" ,concept-symbol)
-				       ,concept-symbol)))))
-		   (defmethod ,concept-implementation-tag-setter  ( new-tag ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
-		     (let ((concept-symbol
-			     (find-symbol 
-			      (symbol-name 
-			       (%create-concept-symbol ',concept-name
-						       ',(jp.doc-ll:documented-lambda-list-argument-symbols concept-args)))
-			      *concepts-package*)))
-		       (setf (symbol-value concept-symbol) new-tag))))
-		 (defmethod ,concept-method ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
-		   (,concept-method-impl (,concept-implementation-tag ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)) ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args))))))))))
+		   (let ((*package* ,*concepts-package*))
+		     (defgeneric ,concept-method-impl ( +concept-impl+ ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		       (:documentation ,full-doc))
+		     (defgeneric ,concept-implementation-tag ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		       (:documentation "retrieves the current implementation tag for a concept (based on types used to call the concept!)"))
+		     (defgeneric ,concept-implementation-tag-setter ( new-tag ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		       (:documentation "sets the current implementation tag for a concept (based on types used to call the concept!)"))
+		     (defmethod ,concept-implementation-tag ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		       (let ((concept-symbol
+			       (find-symbol 
+				(symbol-name 
+				 (%create-concept-symbol ',concept-name
+							 (mapcar #'type-of (list ,@(jp.doc-ll:documented-lambda-list-argument-symbols concept-args)))))
+				*concepts-package*)))
+			 (if (and concept-symbol (boundp concept-symbol))
+			     (values (symbol-value concept-symbol)
+				     concept-symbol)
+			     (if (next-method-p)
+				 (call-next-method)
+				 (values (format nil "** ~A" ,concept-symbol)
+					 ,concept-symbol)))))
+		     (defmethod ,concept-implementation-tag-setter  ( new-tag ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		       (let ((concept-symbol
+			       (find-symbol 
+				(symbol-name 
+				 (%create-concept-symbol ',concept-name
+							 ',(jp.doc-ll:documented-lambda-list-argument-symbols concept-args)))
+				*concepts-package*)))
+			 (setf (symbol-value concept-symbol) new-tag))))
+		   (defmethod ,concept-method ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
+		     ,full-doc
+		     (,concept-method-impl (,concept-implementation-tag ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)) ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)))))))))))
   
   
 
