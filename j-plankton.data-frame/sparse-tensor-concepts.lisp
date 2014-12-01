@@ -13,12 +13,31 @@
 ;;============================================================================
 
 ;;;;
+;;;; Access the number of dimension in a sparse tensor
+(define-concept
+    num-dimensions
+    ( (object "the tensor object") )
+  "Returns the number of dimensions for a sparse tensor")
+
+;;============================================================================
+
+;;;;
+;;;; Access the default value of a sparse tensor
+(define-concept
+    default-value
+    ( (object "the tensor object"))
+  "Returns the default value for a sparse tensor")
+
+;;============================================================================
+
+
+;;;;
 ;;;; Access an element of a sparse tensor using the integer indices
 (define-concept
     tref
-  ( (tensor "The sparse tensor object")
-    &rest
-    (indices "the indices for the dimensions of the tensor"))
+    ( (tensor "The sparse tensor object")
+      &rest
+      (indices "the indices for the dimensions of the tensor"))
   "Access a particular element of a tensor with N dimenensions by
    calling (tref <tensor> i0 i1 ... iN-1)")
 
@@ -130,6 +149,25 @@
 ;;=========================================================================
 ;;=========================================================================
 
+(implement-concept
+    (num-dimensions generic
+     "The generic way to query for number of dimensions:
+      assume there is a method num-dimensions"
+     :default-implementation t)
+    ( (object "the sparse tensor"))
+  (num-dimensions object))
+
+;;=========================================================================
+
+(implement-concept
+    (default-value generic
+     "The generic way to query for the default value:
+      assume there is a method default-value"
+      :default-implementation t)
+    ( (object "the sparse tensor"))
+  (default-value object))
+
+;;=========================================================================
 
 (implement-concept
     (tensor->alist generic 
