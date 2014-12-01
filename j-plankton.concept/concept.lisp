@@ -227,7 +227,9 @@
 			 (setf (symbol-value concept-symbol) new-tag))))
 		   (defmethod ,concept-method ( ,@(jp.doc-ll:documented-lambda-list->lambda-list concept-args) )
 		     ,full-doc
-		     (,concept-method-impl (,concept-implementation-tag ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)) ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)))))))))))
+		     ,(if (jp.doc-ll:documented-lambda-list-has-&rest concept-args)
+			  `(apply #',concept-method-impl (apply #',concept-implementation-tag ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)) ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args))
+			  `(,concept-method-impl (,concept-implementation-tag ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args)) ,@(jp.doc-ll:foward-arguments-from-documented-lambda-list concept-args))))))))))))
   
   
 

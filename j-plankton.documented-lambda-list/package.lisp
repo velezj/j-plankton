@@ -5,6 +5,7 @@
   (:use #:cl)
   (:export
    #:normalize-documented-lambda-list
+   #:documented-lambda-list-has-&rest
    #:documented-lambda-list-argument-types
    #:documented-lambda-list-argument-symbols
    #:foward-arguments-from-documented-lambda-list

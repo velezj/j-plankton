@@ -178,6 +178,18 @@
 ;;=======================================================================
 
 ;;;;
+;;;; returns whether the given documented-lambda-list has &rest arguments
+(defun documented-lambda-list-has-&rest (documented-lambda-list 
+					 &key (error-on-missing-doc t))
+  (let ((parsed-ll
+	  (%parse-documented-lambda-list 
+	   documented-lambda-list
+	   :error-on-missing-doc error-on-missing-doc)))
+    (getf parsed-ll :rest)))
+
+;;=======================================================================
+
+;;;;
 ;;;; Given a documented lambda list, returns a list of how one should
 ;;;; forward the arguments of the lambda list
 (defun foward-arguments-from-documented-lambda-list (doc-lambda-list 
