@@ -26,7 +26,7 @@
     :initarg :global-labels-tensor
     :accessor global-labels-tensor
     :documentation "A tensor with the mapping for global labels to a value 
-                    for all the dat in the data-tensor")
+                    for all the data in the data-tensor")
 
    (dimension-labels
     :type 'hash-table
@@ -61,6 +61,16 @@
    
 
 ;;=========================================================================
+
+;;;;
+;;;; A function to make a data-frame-t object.
+;;;; It takes thw following keyword arguments:
+;;;;    :data-tensor = the underlying sparse tensor holding data
+;;;;    :dimensional-extents = a lsit of extents dterminig the subset of the
+;;;;                           sparse tensor this data-frame is 'viewing'
+;;;;                           Each element must be an dimensional-extent-t
+;;;;    :
+
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================

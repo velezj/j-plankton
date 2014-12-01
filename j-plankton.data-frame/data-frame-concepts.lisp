@@ -5,6 +5,9 @@
 ;;;;
 ;;;; We defien a concept for getting a "slice" of a data-frame.
 ;;;; This returns a data-frame with a subset of the elements
+;;;;
+;;;; the slice concept applies and index-set-t to an object, returning
+;;;; the resulting sub-object
 (define-concept
     slice
     ( (data-source "The original object from which we want a slice.
