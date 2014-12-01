@@ -70,17 +70,20 @@
     :accessor data-tensor
     :documentation "the spartns sparse tensor which has as values the data
                     indexed by the inherent integer indices" )
+   
    (global-labels
     :type 'list
     :initarg :global-labels
     :initform nil
     :accessor global-labels
     :documentation "A list of global labels which have values for all data")
+
    (global-labels-tensor
     :initarg :global-labels-tensor
     :accessor global-labels-tensor
     :documentation "A tensor with the mapping for global labels to a value 
                     for all the dat in the data-tensor")
+
    (dimension-labels
     :type 'hash-table
     :initarg :dimension-labels
@@ -89,12 +92,14 @@
     :documentation "A hashtable mapping a dimension to a list of
                     labes which are all applicable and have values for
                     that dimension")
+
    (dimension-labels-data-map
     :type 'hash-table
     :initform :dimension-labels-data-map
     :accessor dimension-labels-data-map
     :documentation "a hashtable mapping from a dimension label to a 
                     tensor with the label value for that data cell")
+
    (local-labels
     :type 'list
     :initarg :local-labels
@@ -102,6 +107,7 @@
     :accessor local-labels
     :documentation "A list of any local labels (labels that are per-cell)
                     that this dataframe contains")
+
    (local-labels-tensor
     :initform :local-labels-tensor
     :accessor local-labels-tensor
