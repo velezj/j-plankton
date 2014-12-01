@@ -234,6 +234,75 @@
 ;;=========================================================================
 
 ;;;;
+;;;; A cursor type which sweeps a given set of cursors from left-ro-right
+;;;; resetting each until at the ned all are done
+(defclass sweep-cursor-t ()
+  ((original-cursors
+    :initarg :cursors
+    :reader original-cursors)
+   (current-cursor-index
+    :accessor current-cursor-index)))
+
+;;=========================================================================
+
+(defmethod value ( (sweep sweep-cursor-t) )
+  (mapcar #'value (original-cursors sweep)))
+
+;;=========================================================================
+
+(defmethod done-p ( (sweep sweep-cursor-t ))
+  (every #'done-p (original-cursors sweep)))
+
+;;=========================================================================
+
+(defmethod reset ( (sweep sweep-cursor-t) )
+  (mapcar #'reset (original-cursors sweep))
+  (setf (current-cursor-index sweep) 0))
+
+
+;;=========================================================================
+
+(defmethod next ( (sweep sweep-cursor-t) )
+  (when (done-p sweep)
+    (error 'cursor-finished-condition
+	   :cursor sweep))
+  ;; ok, if our current curso is not done, just next it and we're done
+  (if (not (done-p (elt (original-cursors sweep)
+			(current-cursor-index sweep))))
+      (let ((val (value sweep)))
+	(next (elt (original-cursors sweep)
+		   (current-cursor-index sweep)))
+	(values 
+	 val
+	 (done-p sweep)))
+      ;; ok, now we have to switch which cursor we are
+      ;; currently sweeping, and reset this current cursor
+      ;; and next the switched-to cursor
+      (let ((old-val (value sweep))
+	    (old-c
+	      (elt (original-cursors sweep)
+		   (current-cursor-index sweep)))
+	    (new-c
+	      (elt (original-cursors sweep)
+		   (1+ (current-cursor-index sweep)))))
+	(reset old-c)
+	(next new-c)
+	(values
+	 old-val
+	 (done-p sweep)))))
+
+;;=========================================================================
+
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+
+
+;;;;
 ;;;; Create a range cursor with start/end and step.
 ;;;; step may be a function which takes the a range-cursor-t object
 ;;;; and must return the next step to apply as well as if the 
@@ -291,6 +360,54 @@
    :f func))
 
 ;;=========================================================================
+
+;;;;
+;;;; Make a labeled cursor, which labels the results of a cursor
+;;;; with a set of labels, returning and association list with
+;;;; (label value) pairs.
+;;;;
+;;;; If the label is not a list of labels, we return a single
+;;;; pairing of (label value) rather than a ssociation lisst
+(defun cursor/label (label-list cursor)
+  (if (listp label-list)
+      (cursor/transform
+       #'(lambda (val)
+	   (mapcar #'(lambda (label)
+		       (cons label val))
+		   label-list))
+       cursor)
+      (cursor/transform
+       #'(lambda (val)
+	   (list label-list val))
+       cursor)))
+  
+
+;;=========================================================================
+
+;;;;
+;;;; Define a cursorwhich returns a parrallel sweep of the given
+;;;; cursors (their values as a list of values)
+(defun cursor/parallel-sweep (&rest cursors)
+  (apply
+   #'cursor/transform 
+   #'list
+   cursors))
+
+;;=========================================================================
+
+;;;;
+;;;; Define a cursor which sweeps , from left ro right, the values of the
+;;;; given cursors, retunring the values as a list. 
+(defun cursor/sweep (&rest cursors)
+  (let ((sweep
+	  (make-instance 'sweep-cursor-t
+			 :cursors cursors)))
+    (setf (slot-value sweep 'current-cursor-index) 0)
+    sweep))
+
+;;=========================================================================
+
+
 
 ;;;;
 ;;;; Returns a list of the values of a cursor
