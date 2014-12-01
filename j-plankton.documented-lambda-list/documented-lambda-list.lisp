@@ -149,8 +149,8 @@
 		     :type :other))
 	   (getf parsed-doc-ll :others))
    (mapcar #'(lambda (rest-arg)
-	       (list :var-forward (list (all-but-last rest-arg))
-		     :lambda-list-foward (list (all-but-last rest-arg))
+	       (list :var-forward (all-but-last rest-arg)
+		     :lambda-list-foward (all-but-last rest-arg)
 		     :doc (car (last rest-arg))
 		     :original rest-arg
 		     :type :rest))
@@ -235,7 +235,7 @@
 				    (getf norm-arg :type))))
 		       norm-args))))
     (append positional 
-	    (when rest (list '&rest (caar rest)))
+	    (when rest (list '&rest)) rest
 	    (when named (list '&key)) named
 	    others)))
   
