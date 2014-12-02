@@ -14,6 +14,7 @@
 
    ;; creators
    #:cursor/range
+   #:cursor/seq
 
    ;; transformers
    #:cursor/label
