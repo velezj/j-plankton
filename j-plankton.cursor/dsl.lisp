@@ -10,8 +10,11 @@
     (return-from %parse-cursor-expression
       (cursor/range 0 -1 0 -1)))
   (etypecase expr
+    (cursor-t
+     expr)
     (symbol
-     (if (boundp expr)
+     (if (and (boundp expr)
+	      (not (keywordp expr)))
 	 (%parse-cursor-expression (symbol-value expr))
 	 (if (fboundp expr)
 	     (%parse-cursor-expression (funcall (function expr)))
@@ -27,6 +30,8 @@
 			(cursor/repeat (%parse-cursor-expression (cdddr expr))
 				       :max-count (caddr expr) )
 			(cursor/repeat (%parse-cursor-expression (cdr expr)))))
+	 ((:f :trans) (apply #'cursor/transform (cadr expr)
+			     (mapcar #'%parse-cursor-expression (cddr expr))))
 	 ('quote (cursor/seq expr))
 	 (t (apply #'cursor/cat 
 		   (mapcar #'%parse-cursor-expression
@@ -97,6 +102,18 @@
 
 ;;=========================================================================
 
+;;;;
+;;;; Compsing cursors should pack their inner cursors
+;;;; This should be chained in a call to call-next-method
+(defmethod %pack-cursor-tree ( (comp composing-cursor-t) &key )
+  (format t "composing pack called: ~A~%" comp)
+  (replace 
+   (original-cursors comp)
+   (mapcar #'%pack-cursor-tree (original-cursors comp)))
+  comp)
+
+;;=========================================================================
+
 
 ;;;;
 ;;;; Pack concatenation cursors
@@ -107,14 +124,12 @@
     (format t "limiting phase reached: ~A~%" phase)
     (return-from %pack-cursor-tree cat))
 
-  ;; first, pack it's cursors
-  (when (= phase 0)
-    (format t "applying phase 0, packing inner cursors~%")
-    (setf
-     cat
-     (apply #'cursor/cat
-	    (mapcar #'%pack-cursor-tree (original-cursors cat)))))
-  
+  ;; check if we only have a single inner cursor, in which case
+  ;; we are redundant
+  (when (= (length (original-cursors cat)) 1)
+    (return-from %pack-cursor-tree
+      (%pack-cursor-tree (first (original-cursors cat)))))
+
   ;; ok, now condense sequence cursors
   (multiple-value-bind
 	(n start end)
@@ -145,7 +160,9 @@
 	  (%pack-cursor-tree
 	   (apply #'cursor/cat sub-cursors)
 	   :phase (1+ phase)))
-	cat)))
+	(if (next-method-p)
+	    (call-next-method cat)
+	    cat))))
 
 
 

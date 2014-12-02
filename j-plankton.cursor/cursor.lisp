@@ -71,8 +71,25 @@
 ;;=========================================================================
 
 ;;;;
+;;;; the base cursor type. Any cursors should substype from this
+(defclass cursor-t ()
+  ())
+
+;;;;
+;;;; base cursor type fo compositional cursors
+(defclass composing-cursor-t (cursor-t)
+  ((original-cursors
+    :initarg :cursors
+    :reader original-cursors)))
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+
+;;;;
 ;;;; the type for a ranged cursor with start/end and step
-(defclass range-cursor-t ()
+(defclass range-cursor-t (cursor-t)
   ((value
     :type 'number
     :initarg :value
@@ -172,14 +189,8 @@
 ;;;; We optionally allow to iterator to the longest or shortest of the
 ;;;; cursors given, and can include a default value to use per cursor
 ;;;; for when transofmring based onlongest cursor
-(defclass transform-cursor-t ()
-  ((original-cursors
-    :initarg :cursors
-    :reader original-cursors
-    :documentation
-    "a list of cursors we will use")
-
-   (termination
+(defclass transform-cursor-t (composing-cursor-t)
+  ((termination
     :initarg :termination
     :initform :shortest
     :reader termination
@@ -285,28 +296,26 @@
 ;;;;
 ;;;; A cursor type which sweeps a given a pair (2)  cursors from left-ro-right
 ;;;; resetting each until at the ned all are done
-(defclass %sweep-2-cursor-t ()
-  ((cursor-pair
-    :initarg :cursors
-    :reader cursor-pair)))
+(defclass %sweep-2-cursor-t (composing-cursor-t)
+  ())
 
 (defmethod print-object ( (sweep %sweep-2-cursor-t) stream )
   (format stream "#<%sweep-2 ~A , ~A ~A>"
-	  (first (cursor-pair sweep))
-	  (second (cursor-pair sweep))
+	  (first (original-cursors sweep))
+	  (second (original-cursors sweep))
 	  (if (done-p sweep) "*" "")))
 
 ;;=========================================================================
 
 (defmethod clone ( (sweep %sweep-2-cursor-t))
   (make-instance '%sweep-2-cursor-t
-		 :cursors (mapcar #'clone (cursor-pair sweep))))
+		 :cursors (mapcar #'clone (original-cursors sweep))))
 
 ;;=========================================================================
 
 
 (defmethod value ( (sweep %sweep-2-cursor-t) )
-  (destructuring-bind (a b) (cursor-pair sweep)					
+  (destructuring-bind (a b) (original-cursors sweep)					
     (append
      (typecase a
        (%sweep-2-cursor-t (value a))
@@ -319,12 +328,12 @@
 ;;=========================================================================
 
 (defmethod done-p ( (sweep %sweep-2-cursor-t ))
-  (every #'done-p (cursor-pair sweep)))
+  (every #'done-p (original-cursors sweep)))
 
 ;;=========================================================================
 
 (defmethod reset ( (sweep %sweep-2-cursor-t) )
-  (mapcar #'reset (cursor-pair sweep)))
+  (mapcar #'reset (original-cursors sweep)))
 
 
 ;;=========================================================================
@@ -340,8 +349,8 @@
   ;; if this causes it to be done, call next on the second cursor.
   ;; if it is not done, reset first cursor to keep sweeping
   (let ((prev-value (value sweep))
-	(a (first (cursor-pair sweep)))
-	(b (second (cursor-pair sweep))))
+	(a (first (original-cursors sweep)))
+	(b (second (original-cursors sweep))))
     (next a)
     (when (done-p a)
       (next b)
@@ -358,7 +367,7 @@
 
 ;;;;
 ;;;; A cursor which goes through elements of a sequence
-(defclass seq-cursor-t ()
+(defclass seq-cursor-t (cursor-t)
   ((seq
     :type 'sequence
     :initarg :seq
@@ -445,11 +454,8 @@
 
 ;;;;
 ;;;; A cursor which concatenates a set of cursor in order
-(defclass cat-cursor-t ()
-  ((original-cursors
-    :initarg :cursors
-    :reader original-cursors)
-   (index
+(defclass cat-cursor-t (composing-cursor-t)
+  ((index
     :initarg :index
     :accessor index)))
 
@@ -526,11 +532,8 @@
 ;;;; Create a repeating cursor which just call next on the given
 ;;;; cursor until it is done then resets it and continues
 ;;;; This cursor is *never* done by default
-(defclass repeat-cursor-t ()
-  ((original-cursor
-    :initarg :cursor
-    :reader original-cursor)
-   (max-count
+(defclass repeat-cursor-t (composing-cursor-t)
+  ((max-count
     :initarg :max-count
     :accessor max-count)
    (current-count
@@ -545,7 +548,7 @@
 
 (defmethod print-object ( (rep repeat-cursor-t) stream )
   (format stream "#<repeat ~A ~A ~A>"
-	  (original-cursor rep)
+	  (first (original-cursors rep))
 	  (if (max-count rep)
 	      (format nil "~A/~A"
 		      (current-count rep)
@@ -559,7 +562,7 @@
 
 (defmethod clone ( (rep repeat-cursor-t) )
   (make-instance 'repeat-cursor-t
-		 :cursor (clone (original-cursor rep))
+		 :cursors (mapcar #'clone (original-cursors rep))
 		 :max-count (max-count rep)
 		 :count (current-count rep)))
    
@@ -575,22 +578,22 @@
 ;;=========================================================================
 
 (defmethod reset ( (rep repeat-cursor-t) )
-  (reset (original-cursor rep))
+  (mapcar #'reset (original-cursors rep))
   (setf (current-count rep) 0))
 
 ;;=========================================================================
 
 (defmethod value ( (rep repeat-cursor-t) )
-  (value (original-cursor rep)))
+  (value (first (original-cursors rep))))
 
 ;;=========================================================================
 
 (defmethod next ( (rep repeat-cursor-t) )
   (let ((old-value (value rep)))
-    (next (original-cursor rep))
+    (next (first (original-cursors rep)))
     (incf (current-count rep))
-    (when (done-p (original-cursor rep))
-      (reset (original-cursor rep)))
+    (when (done-p (first (original-cursors rep)))
+      (reset (first (original-cursors rep))))
     (values
      old-value
      (done-p rep))))
@@ -668,7 +671,7 @@
 ;;;; cursor. Optionally, a maximum count of element can be given
 (defun cursor/repeat ( cursor &key (max-count nil) )
   (make-instance 'repeat-cursor-t
-		 :cursor cursor
+		 :cursors (list cursor)
 		 :max-count max-count))
 
 ;;=========================================================================
