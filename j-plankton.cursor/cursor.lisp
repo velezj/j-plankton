@@ -96,7 +96,14 @@
 (defmethod initialize-instance :after ( (range range-cursor-t) &key )
   (when (not (slot-boundp range 'value))
     (setf (value range) (start range))))
-   
+
+
+(defmethod print-object ( (range range-cursor-t) stream )
+  (format stream "#<RANGE-CURSOR-T at ~A [~A,~A,~A]>"
+	  (value range)
+	  (start range)
+	  (end range)
+	  (step-f range)))
 
 ;;=========================================================================
 
@@ -234,62 +241,66 @@
 ;;=========================================================================
 
 ;;;;
-;;;; A cursor type which sweeps a given set of cursors from left-ro-right
+;;;; A cursor type which sweeps a given a pair (2)  cursors from left-ro-right
 ;;;; resetting each until at the ned all are done
-(defclass sweep-cursor-t ()
-  ((original-cursors
+(defclass %sweep-2-cursor-t ()
+  ((cursor-pair
     :initarg :cursors
-    :reader original-cursors)
-   (current-cursor-index
-    :accessor current-cursor-index)))
+    :reader cursor-pair)))
+
+(defmethod print-object ( (sweep %sweep-2-cursor-t) stream )
+  (format stream "#<%SWEEP-2-CURSOR-T ~A , ~A>"
+	  (first (cursor-pair sweep))
+	  (second (cursor-pair sweep))))
 
 ;;=========================================================================
 
-(defmethod value ( (sweep sweep-cursor-t) )
-  (mapcar #'value (original-cursors sweep)))
+(defmethod value ( (sweep %sweep-2-cursor-t) )
+  (destructuring-bind (a b) (cursor-pair sweep)					
+    (append
+     (typecase a
+       (%sweep-2-cursor-t (value a))
+       (t (list (value a))))
+     (typecase b
+       (%sweep-2-cursor-t (value b))
+       (t (list (value b)))))))
+			  
 
 ;;=========================================================================
 
-(defmethod done-p ( (sweep sweep-cursor-t ))
-  (every #'done-p (original-cursors sweep)))
+(defmethod done-p ( (sweep %sweep-2-cursor-t ))
+  (every #'done-p (cursor-pair sweep)))
 
 ;;=========================================================================
 
-(defmethod reset ( (sweep sweep-cursor-t) )
-  (mapcar #'reset (original-cursors sweep))
-  (setf (current-cursor-index sweep) 0))
+(defmethod reset ( (sweep %sweep-2-cursor-t) )
+  (mapcar #'reset (cursor-pair sweep)))
 
 
 ;;=========================================================================
 
-(defmethod next ( (sweep sweep-cursor-t) )
+(defmethod next ( (sweep %sweep-2-cursor-t) )
+
+  ;; if we are done, error out
   (when (done-p sweep)
     (error 'cursor-finished-condition
 	   :cursor sweep))
-  ;; ok, if our current curso is not done, just next it and we're done
-  (if (not (done-p (elt (original-cursors sweep)
-			(current-cursor-index sweep))))
-      (let ((val (value sweep)))
-	(next (elt (original-cursors sweep)
-		   (current-cursor-index sweep)))
-	(values 
-	 val
-	 (done-p sweep)))
-      ;; ok, now we have to switch which cursor we are
-      ;; currently sweeping, and reset this current cursor
-      ;; and next the switched-to cursor
-      (let ((old-val (value sweep))
-	    (old-c
-	      (elt (original-cursors sweep)
-		   (current-cursor-index sweep)))
-	    (new-c
-	      (elt (original-cursors sweep)
-		   (1+ (current-cursor-index sweep)))))
-	(reset old-c)
-	(next new-c)
-	(values
-	 old-val
-	 (done-p sweep)))))
+
+  ;; always call next on the first cursor, unless it is done
+  ;; in which case call next on the second
+  (let ((prev-value (value sweep))
+	(a (first (cursor-pair sweep)))
+	(b (second (cursor-pair sweep))))
+    (format t "sweep: a=~A, b=~A, prev=~A~%"
+	    a b prev-value)
+    (if (done-p a)
+	(progn
+	  (reset a)
+	  (next b))
+	(next a))
+    (values
+     prev-value
+     (done-p sweep))))
 
 ;;=========================================================================
 
@@ -399,11 +410,8 @@
 ;;;; Define a cursor which sweeps , from left ro right, the values of the
 ;;;; given cursors, retunring the values as a list. 
 (defun cursor/sweep (&rest cursors)
-  (let ((sweep
-	  (make-instance 'sweep-cursor-t
-			 :cursors cursors)))
-    (setf (slot-value sweep 'current-cursor-index) 0)
-    sweep))
+  (make-instance '%sweep-2-cursor-t
+			 :cursors cursors))
 
 ;;=========================================================================
 
