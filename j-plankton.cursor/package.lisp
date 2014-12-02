@@ -17,9 +17,10 @@
    #:cursor/seq
 
    ;; transformers
+   #:cursor/cat
    #:cursor/label
-   #:cursor/tranform
-   #:cursor/tranform-to-last
+   #:cursor/transform
+   #:cursor/transform-to-last
 
    ;; sweeps
    #:cursor/parallel-sweep

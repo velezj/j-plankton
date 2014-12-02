@@ -432,13 +432,93 @@
 ;;=========================================================================
 ;;=========================================================================
 
+;;;;
+;;;; A cursor which concatenates a set of cursor in order
+(defclass cat-cursor-t ()
+  ((original-cursors
+    :initarg :cursors
+    :reader original-cursors)
+   (index
+    :initarg :index
+    :accessor index)))
+
+
+(defmethod initialize-instance :after ( (cat cat-cursor-t) &key )
+  (when 
+      (not (slot-boundp cat 'index))
+    (setf (index cat) 0)))
+
 ;;=========================================================================
+
+(defmethod clone ( (cat cat-cursor-t) )
+  (make-instance
+   'cat-cursor-t
+   :cursors
+   (mapcar #'clone (original-cursors cat))
+   :index 
+   (index cat)))
+  
+
 ;;=========================================================================
+
+
+(defmethod print-object ( (cat cat-cursor-t) stream )
+  (format stream "#<cat ~{~A~^, ~} ~A>"
+	  (original-cursors cat)
+	  (if (done-p cat) "*" "")))
+
+;;=========================================================================
+
+(defmethod done-p ( (cat cat-cursor-t) )
+  (every #'done-p (original-cursors cat)))
+
+;;=========================================================================
+
+(defmethod value ( (cat cat-cursor-t) )
+  (when (done-p cat)
+    (error 'cursor-finished-condition
+	   :cursor cat))
+  (value
+   (elt (original-cursors cat)
+	(index cat))))
+
+;;=========================================================================
+
+(defmethod reset ( (cat cat-cursor-t) )
+  (mapcar #'reset (original-cursors cat)))
+
+;;=========================================================================
+
+(defmethod next ( (cat cat-cursor-t) )
+  (when (done-p cat)
+    (error 'cursor-finished-condition
+	   :cursor cat))
+
+  (let ((prev-value (value cat))
+	(c (elt (original-cursors cat)
+		(index cat))))
+    (next c)
+    (when (done-p c)
+      (incf (index cat)))
+    (values
+     prev-value
+     (done-p cat))))
+	
+	     
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
 
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
 
 ;;;;
 ;;;; Create a range cursor with start/end and step.
@@ -475,6 +555,15 @@
 (defun cursor/seq ( seq )
   (make-instance 'seq-cursor-t
 		 :seq seq))
+
+;;=========================================================================
+
+;;;;
+;;;; Create a cursor which just concatenates the given cursors in order
+(defun cursor/cat (&rest cursors)
+  (make-instance
+   'cat-cursor-t
+   :cursors cursors))
 
 ;;=========================================================================
 
