@@ -43,6 +43,17 @@
 ;;=========================================================================
 
 ;;;;
+;;;; Protocol method which clones a cursor so that calling next/reset
+;;;; change the returned cursor not hte original
+(defgeneric clone (cursor)
+  (:documentation
+   "Make a copy of a cursor so that future next/reset calls on the 
+    copy do not change the original"))
+
+;;=========================================================================
+
+
+;;;;
 ;;;; Condition raised when calling (next...) on a cursor with no next
 ;;;; element
 (define-condition cursor-finished-condition ()
@@ -105,6 +116,15 @@
 	  (end range)
 	  (step-f range)
 	  (if (done-p range) "*" "")))
+
+;;=========================================================================
+
+(defmethod clone ((range range-cursor-t))
+  (make-instance 'range-cursor-t
+		 :value (value range)
+		 :start (start range)
+		 :end (end range)
+		 :step (step-f range)))
 
 ;;=========================================================================
 
@@ -190,6 +210,16 @@
 
 ;;=========================================================================
 
+(defmethod clone ((tc transform-cursor-t))
+  (make-instance 'transform-cursor-t
+		 :cursors (mapcar #'clone (original-cursors tc))
+		 :default-values (default-values tc)
+		 :termination (termination tc)
+		 :f (transform-f tc)))
+
+;;=========================================================================
+
+
 (defmethod value ( (tc transform-cursor-t))
   (when (done-p tc)
     (error 'cursor-finished-condition
@@ -257,6 +287,13 @@
 
 ;;=========================================================================
 
+(defmethod clone ( (sweep %sweep-2-cursor-t))
+  (make-instance '%sweep-2-cursor-t
+		 :cursors (mapcar #'clone (cursor-pair sweep))))
+
+;;=========================================================================
+
+
 (defmethod value ( (sweep %sweep-2-cursor-t) )
   (destructuring-bind (a b) (cursor-pair sweep)					
     (append
@@ -304,7 +341,96 @@
      (done-p sweep))))
 
 ;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
 
+;;;;
+;;;; A cursor which goes through elements of a sequence
+(defclass seq-cursor-t ()
+  ((seq
+    :type 'sequence
+    :initarg :seq
+    :reader seq
+    :documentation
+    "The seuence backing this cursor")
+   (seq-length
+    :reader seq-length)
+   (seq-value
+    :accessor seq-value)
+   (index
+    :initarg :index
+    :accessor index
+    :documentation
+    "The current elemetn's index")))
+
+
+(defmethod initialize-instance :after ( (seq seq-cursor-t) &key )
+  (when (not (slot-boundp seq 'index))
+    (setf (slot-value seq 'index) 0))
+  (setf (slot-value seq 'seq-length)
+	(length (seq seq)))
+  (setf (seq-value seq)
+	(elt (seq seq) (index seq))))
+
+
+(defmethod print-object ( (seq seq-cursor-t) stream )
+  (format stream "#<seq ~A@~A #~A ~A>"
+	  (value seq)
+	  (index seq)
+	  (length (seq seq))
+	  (if (done-p seq) "*" "")))
+	      
+
+;;=========================================================================
+
+(defmethod clone ( (seq seq-cursor-t) )
+  (make-instance 'seq-cursor-t
+		 :seq (seq seq)
+		 :index (index seq)))
+
+;;=========================================================================
+
+(defmethod done-p ( (seq seq-cursor-t) )
+  (>= (index seq)
+      (seq-length seq)))
+
+;;=========================================================================
+
+(defmethod value ( (seq seq-cursor-t) )
+  (when (done-p seq)
+    (error 'cursor-finished-condition
+	   :cursor seq))
+  (seq-value seq))
+
+;;=========================================================================
+
+(defmethod reset ( (seq seq-cursor-t) )
+  (setf (index seq) 0)
+  (setf (seq-value seq)
+	(elt (seq seq) 0)))
+
+;;=========================================================================
+
+(defmethod next ( (seq seq-cursor-t) )
+  (when (done-p seq)
+    (error 'cursor-finished-condition
+	   :cursor seq))
+  (let ((prev-val (value seq)))
+    (incf (index seq))
+    (when (< (index seq)
+	     (seq-length seq))
+      (setf (seq-value seq)
+	    (elt (seq seq)
+		 (index seq))))
+    (values
+     prev-val
+     (done-p seq))))
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
 
 ;;=========================================================================
 ;;=========================================================================
@@ -340,7 +466,15 @@
      :start 0
      :end start/end
      :step step)))
-      
+
+
+;;=========================================================================
+
+;;;;
+;;;; Create a cursor from a sequence that iterates over it
+(defun cursor/seq ( seq )
+  (make-instance 'seq-cursor-t
+		 :seq seq))
 
 ;;=========================================================================
 

@@ -3,10 +3,28 @@
 (defpackage #:j-plankton.cursor
   (:use #:cl)
   (:export
-   #:has-next-p
+
+   ;; the protocol
+   #:done-p
    #:next
    #:value
    #:reset
+   #:clone
    #:cursor-finished-condition
+
+   ;; creators
+   #:cursor/range
+
+   ;; transformers
+   #:cursor/label
+   #:cursor/tranform
+   #:cursor/tranform-to-last
+
+   ;; sweeps
+   #:cursor/parallel-sweep
+   #:cursor/sweep
+
+   ;; utility
+   #:cursor/materialize
    ))
 
