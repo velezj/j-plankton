@@ -19,9 +19,14 @@
     (list
      (let ((head (first expr)))
        (case head
-	 ((#\: :range) (apply #'cursor/range (cdr expr)))
-	 ((#\x :sweep :x) (apply #'cursor/sweep (mapcar #'%parse-cursor-expression (cdr expr))))
-	 ((#\| :parsweep :par) (apply #'cursor/parallel-sweep (maprcar #'%parse-cursor-expression (cdr expr))))
+	 ((#\: :range :|:| \:) (apply #'cursor/range (cdr expr)))
+	 ((#\x :sweep :x :#) (apply #'cursor/sweep (mapcar #'%parse-cursor-expression (cdr expr))))
+	 ((#\| :parsweep :par :||) (apply #'cursor/parallel-sweep (mapcar #'%parse-cursor-expression (cdr expr))))
+	 ((:repeat) (if (and (> (length (cdr expr)) 2)
+			     (eql (cadr expr) :max))
+			(cursor/repeat (%parse-cursor-expression (cdddr expr))
+				       :max-count (caddr expr) )
+			(cursor/repeat (%parse-cursor-expression (cdr expr)))))
 	 ('quote (cursor/seq expr))
 	 (t (apply #'cursor/cat 
 		   (mapcar #'%parse-cursor-expression

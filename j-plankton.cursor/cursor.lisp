@@ -208,6 +208,17 @@
 	  (make-list (length (original-cursors tc)) 
 		     :initial-element '+unset+))))
 
+(defmethod print-object ( (tc transform-cursor-t) stream )
+  (format stream "#<trans ~A ~S defs=~A F=~A ~A>"
+	  (original-cursors tc)
+	  (termination tc)
+	  (if (and (slot-boundp tc 'default-values)
+		   (default-values tc))
+	      (default-values tc)
+	      nil)
+	  (transform-f tc)
+	  (if (done-p tc) "*" "")))
+
 ;;=========================================================================
 
 (defmethod clone ((tc transform-cursor-t))
@@ -485,7 +496,8 @@
 ;;=========================================================================
 
 (defmethod reset ( (cat cat-cursor-t) )
-  (mapcar #'reset (original-cursors cat)))
+  (mapcar #'reset (original-cursors cat))
+  (setf (index cat) 0))
 
 ;;=========================================================================
 
@@ -505,6 +517,90 @@
      (done-p cat))))
 	
 	     
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+
+;;;;
+;;;; Create a repeating cursor which just call next on the given
+;;;; cursor until it is done then resets it and continues
+;;;; This cursor is *never* done by default
+(defclass repeat-cursor-t ()
+  ((original-cursor
+    :initarg :cursor
+    :reader original-cursor)
+   (max-count
+    :initarg :max-count
+    :accessor max-count)
+   (current-count
+    :initarg :count
+    :accessor current-count)))
+
+(defmethod initialize-instance :after ( (rep repeat-cursor-t) &key)
+  (when (not (slot-boundp rep 'max-count))
+    (setf (slot-value rep 'max-count) nil))
+  (when (not (slot-boundp rep 'current-count))
+    (setf (current-count rep) 0 )))
+
+(defmethod print-object ( (rep repeat-cursor-t) stream )
+  (format stream "#<repeat ~A ~A ~A>"
+	  (original-cursor rep)
+	  (if (max-count rep)
+	      (format nil "~A/~A"
+		      (current-count rep)
+		      (max-count rep))
+	      "FOREVER")
+	  (if (done-p rep) "*" "")))
+	      
+	   
+
+;;=========================================================================
+
+(defmethod clone ( (rep repeat-cursor-t) )
+  (make-instance 'repeat-cursor-t
+		 :cursor (clone (original-cursor rep))
+		 :max-count (max-count rep)
+		 :count (current-count rep)))
+   
+
+;;=========================================================================
+
+(defmethod done-p ( (rep repeat-cursor-t) )
+  (if (max-count rep)
+      (>= (current-count rep)
+	 (max-count rep))
+      nil))
+
+;;=========================================================================
+
+(defmethod reset ( (rep repeat-cursor-t) )
+  (reset (original-cursor rep))
+  (setf (current-count rep) 0))
+
+;;=========================================================================
+
+(defmethod value ( (rep repeat-cursor-t) )
+  (value (original-cursor rep)))
+
+;;=========================================================================
+
+(defmethod next ( (rep repeat-cursor-t) )
+  (let ((old-value (value rep)))
+    (next (original-cursor rep))
+    (incf (current-count rep))
+    (when (done-p (original-cursor rep))
+      (reset (original-cursor rep)))
+    (values
+     old-value
+     (done-p rep))))
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
@@ -564,6 +660,16 @@
   (make-instance
    'cat-cursor-t
    :cursors cursors))
+
+;;=========================================================================
+
+;;;;
+;;;; Create a cursor which just repeats the elemetns from the given
+;;;; cursor. Optionally, a maximum count of element can be given
+(defun cursor/repeat ( cursor &key (max-count nil) )
+  (make-instance 'repeat-cursor-t
+		 :cursor cursor
+		 :max-count max-count))
 
 ;;=========================================================================
 
