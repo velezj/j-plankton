@@ -99,11 +99,12 @@
 
 
 (defmethod print-object ( (range range-cursor-t) stream )
-  (format stream "#<RANGE-CURSOR-T at ~A [~A,~A,~A]>"
+  (format stream "#<range ~A [~A,~A,~A]~A>"
 	  (value range)
 	  (start range)
 	  (end range)
-	  (step-f range)))
+	  (step-f range)
+	  (if (done-p range) "*" "")))
 
 ;;=========================================================================
 
@@ -249,9 +250,10 @@
     :reader cursor-pair)))
 
 (defmethod print-object ( (sweep %sweep-2-cursor-t) stream )
-  (format stream "#<%SWEEP-2-CURSOR-T ~A , ~A>"
+  (format stream "#<%sweep-2 ~A , ~A ~A>"
 	  (first (cursor-pair sweep))
-	  (second (cursor-pair sweep))))
+	  (second (cursor-pair sweep))
+	  (if (done-p sweep) "*" "")))
 
 ;;=========================================================================
 
@@ -286,18 +288,17 @@
     (error 'cursor-finished-condition
 	   :cursor sweep))
 
-  ;; always call next on the first cursor, unless it is done
-  ;; in which case call next on the second
+  ;; always call next on the first cursor
+  ;; if this causes it to be done, call next on the second cursor.
+  ;; if it is not done, reset first cursor to keep sweeping
   (let ((prev-value (value sweep))
 	(a (first (cursor-pair sweep)))
 	(b (second (cursor-pair sweep))))
-    (format t "sweep: a=~A, b=~A, prev=~A~%"
-	    a b prev-value)
-    (if (done-p a)
-	(progn
-	  (reset a)
-	  (next b))
-	(next a))
+    (next a)
+    (when (done-p a)
+      (next b)
+      (when (not (done-p b)) 
+	(reset a)))
     (values
      prev-value
      (done-p sweep))))
@@ -410,8 +411,16 @@
 ;;;; Define a cursor which sweeps , from left ro right, the values of the
 ;;;; given cursors, retunring the values as a list. 
 (defun cursor/sweep (&rest cursors)
-  (make-instance '%sweep-2-cursor-t
-			 :cursors cursors))
+  (when (= 1 (length cursors))
+    (return-from cursor/sweep (car cursors)))
+  
+  ;; ok, build up a chain of %sweep-2 cursors 
+  (reduce #'(lambda (cursor sweep-2)
+	      (make-instance '%sweep-2-cursor-t
+			     :cursors (list cursor sweep-2)))
+	  cursors
+	  :from-end t))
+      
 
 ;;=========================================================================
 
