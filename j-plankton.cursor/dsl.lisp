@@ -33,9 +33,16 @@
 	 ((:f :trans) (apply #'cursor/transform (cadr expr)
 			     (mapcar #'%parse-cursor-expression (cddr expr))))
 	 ('quote (cursor/seq expr))
-	 (t (apply #'cursor/cat 
-		   (mapcar #'%parse-cursor-expression
-			   expr))))))
+	 (t
+	  (if (functionp head)
+	      (%parse-cursor-expression
+	       (apply head (eval `(list ,@(cdr expr)))))
+	      (if (and (symbolp head) (fboundp head))
+		  (%parse-cursor-expression
+		   (apply (symbol-function head) (eval `(list ,@(cdr expr)))))
+		  (apply #'cursor/cat 
+			 (mapcar #'%parse-cursor-expression
+				 expr))))))))
     (t
      (cursor/seq (list expr)))))
 
