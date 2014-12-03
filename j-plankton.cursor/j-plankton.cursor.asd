@@ -4,5 +4,6 @@
   :serial t
   :components ((:file "package")
 	       (:file "cursor")
-	       (:file "dsl")))
+	       (:file "dsl")
+	       (:file "macros")))
 

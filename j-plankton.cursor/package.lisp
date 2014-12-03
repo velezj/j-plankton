@@ -21,12 +21,17 @@
    #:cursor/label
    #:cursor/transform
    #:cursor/transform-to-last
+   #:repeat
 
    ;; sweeps
    #:cursor/parallel-sweep
    #:cursor/sweep
 
-   ;; utility
+   ;; utility / iteration
    #:cursor/materialize
+   #:cursor/loop
+
+   ;; cursor expressions
+   #:cursor-expression->cursor
    ))
 
