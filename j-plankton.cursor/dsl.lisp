@@ -65,7 +65,7 @@
 ;;;; This is the :dsl1 static cursor dialect
 (defun %parse-cursor-expression-dsl1 (expr)
   (when (null expr)
-    (return-from %parse-cursor-expression
+    (return-from %parse-cursor-expression-dsl1
       (cursor/range 0 -1 0 -1)))
   (etypecase expr
     (cursor-t
@@ -75,7 +75,7 @@
 	      (not (keywordp expr)))
 	 (%parse-cursor-expression (symbol-value expr))
 	 (if (fboundp expr)
-	     (%parse-cursor-expression (funcall (function expr)))
+	     (%parse-cursor-expression (funcall (symbol-function expr) nil))
 	     (cursor/seq (list expr)))))
     (list
      (let ((head (first expr)))
@@ -137,6 +137,8 @@
     ;; loop over rules in order, seeing which one parses
     ;; th expression first and setting cursor and parsed-p
     (dolist (rule rules)
+      (format t "parse, trying rule ~A~%"
+	      (getf rule :name))
       (multiple-value-bind (r-cursor r-parsed-p)
 	  (handler-case
 	      (funcall (getf rule :rule)
@@ -220,16 +222,13 @@
   (parse/add-rule
    :range
    #'(lambda (expr rules-workspace)
-       (unless (and (listp expr)
-		    (member (first expr) '(:range #\: \: :|:|)))
-	 (values nil nil))
-       (format t "parse/range: ~S expr=~S ~%"
-	       (and (listp expr)
-		    (member (first expr) '(:range #\: \: :|:|)))
-	       expr)
-       (values
-	(apply #'cursor/range (cdr expr))
-	t))))
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:range #\: \: :|:|)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (apply #'cursor/range (cdr expr))
+	  t)))))
 
 ;;=========================================================================
 
@@ -239,15 +238,16 @@
   (parse/add-rule
    :sweep
    #'(lambda (expr rules-workspace)
-       (unless (and (listp expr)
-		    (member (first expr) '(:sweep #\x :x :#)))
-	 (values nil nil))
-       (values
-	(apply #'cursor/sweep
-	       (mapcar #'(lambda (x)
-			   (%parse-cursor-expression x :dialect dialect))
-		       (cdr expr)))
-	t))))
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:sweep #\x :x :#)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (apply #'cursor/sweep
+		 (mapcar #'(lambda (x)
+			     (%parse-cursor-expression x :dialect dialect))
+			 (cdr expr)))
+	  t)))))
 
 ;;=========================================================================
 
@@ -257,15 +257,16 @@
   (parse/add-rule
    :parsweep
    #'(lambda (expr rules-workspace)
-       (unless (and (listp expr)
-		    (member (first expr) '(:parsweep :par #\| :||)))
-	 (values nil nil))
-       (values
-	(apply #'cursor/parallel-sweep
-	       (mapcar #'(lambda (x)
-			   (%parse-cursor-expression x :dialect dialect))
-		       (cdr expr)))
-	t))))
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:parsweep :par #\| :||)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (apply #'cursor/parallel-sweep
+		 (mapcar #'(lambda (x)
+			     (%parse-cursor-expression x :dialect dialect))
+			 (cdr expr)))
+	  t)))))
 
 
 ;;=========================================================================
@@ -278,18 +279,19 @@
   (parse/add-rule
    :repeat
    #'(lambda (expr rules-workspace)
-       (unless (and (listp expr)
-		    (member (first expr) '(:repeat)))
-	 (values nil nil))
-       (values
-	(if (and (> (length (cdr expr)) 2)
-		 (eql (cadr expr) :max))
-	    (cursor/repeat (%parse-cursor-expression (cdddr expr)
-						     :dialect dialect)
-			   :max-count (caddr expr) )
-	    (cursor/repeat (%parse-cursor-expression (cdr expr)
-						     :dialect dialect)))
-	t))))
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:repeat)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (if (and (> (length (cdr expr)) 2)
+		   (eql (cadr expr) :max))
+	      (cursor/repeat (%parse-cursor-expression (cdddr expr)
+						       :dialect dialect)
+			     :max-count (caddr expr) )
+	      (cursor/repeat (%parse-cursor-expression (cdr expr)
+						       :dialect dialect)))
+	  t)))))
 
 
 ;;=========================================================================
@@ -305,36 +307,143 @@
   (parse/add-rule
    :seq/seq
    #'(lambda (expr rules-workspace)
-       (unless (and (listp expr)
-		    (member (first expr) '(:seq)))
-	 (values nil nil))
-       (values
-	(cursor/seq (cdr expr))
-	t)))
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:seq)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (cursor/seq (cdr expr))
+	  t))))
 
   ;; normal rule
   (parse/add-rule
-   :seq/quote
+   :seq/terminal
    #'(lambda (expr rules-workspace)
-       (unless (and (listp expr)
-		    (member (first expr) '(quote)))
-	 (values nil nil))
-       (values
-	(cursor/seq expr)
-	t))))
+       (block rule
+	 (unless (or
+		  (and (symbolp expr)
+		       (not (boundp expr))
+		       (not (fboundp expr)))
+		  (numberp expr)
+		  (characterp expr)
+		  (stringp expr))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (cursor/seq (list expr))
+	  t)))))
+
+;;=========================================================================
+
+;;;;
+;;;; pass-trhough ruler
+(defmethod parse/add-rule-for ( (name (eql :cursor)) dialect )
+  (parse/add-rule
+   :cursor/passthrough
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (format t "cursor/passthrough expr=~S~%" expr)
+	 (unless (and (typep expr 'cursor-t))
+	   (return-from rule (values nil nil)))
+	 (format t "cursor/passthrough passing untouched ~S~%"
+		 (values expr t))
+	 (values
+	  expr
+	  t)))))
+
+;;=========================================================================
+
+;;;;
+;;;; rule for symbols which are boundp
+(defmethod parse/add-rule-for ( (name (eql :bound-var)) dialect )
+  (parse/add-rule
+   :bound-var
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (format t "bound-var, expr=~S (~A,~A)~%" 
+		 expr
+		 (symbolp expr)
+		 (and (symbolp expr)
+		      (boundp expr)))
+	 (unless (and (symbolp expr)
+		      (boundp expr))
+	   (return-from rule (values nil nil)))
+	 (format t "bound-var, expr-value=~S~%"
+		 (symbol-value expr))
+	 (values
+	  (%parse-cursor-expression
+	   (symbol-value expr)
+	   :dialect dialect)
+	  t)))))
+	 
+
+;;=========================================================================
+
+
+;;;;
+;;;; Add parse rules for concatenation (cat) cursors
+(defmethod parse/add-rule-for ( (type (eql 'cat-cursor-t)) dialect )
+  (parse/add-rule-for :cat dialect))
+(defmethod parse/add-rule-for ( (name (eql :cat)) dialect )
+  
+  ;; normal rule
+  (parse/add-rule
+   :cat/cat
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:cat)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (apply #'cursor/cat 
+		 (mapcar #'(lambda (x)
+			     (%parse-cursor-expression 
+			      x
+			      :dialect dialect))
+			 (cdr expr)))
+	  t))))
+
+  ;; normal ruler
+  (parse/add-rule
+   :cat/inherent-list
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (unless (and (listp expr)
+		      (not (and
+			    (consp (first expr))
+			    (symbolp  (first expr))
+			    (fboundp (first expr)))))
+	   (return-from rule
+	     (values nil nil)))
+	 (values
+	  (apply #'cursor/cat
+		 (mapcar #'(lambda (x)
+			     (%parse-cursor-expression
+			      x :dialect dialect))
+			 expr))
+	  t)))))
   
 
 
 ;;=========================================================================
 
 (defun %add-default-rules ()
+  (parse/add-rule-for :cursor *cursor-expression-dialect*)
   (parse/add-rule-for :range *cursor-expression-dialect*)
   (parse/add-rule-for :sweep *cursor-expression-dialect*)
   (parse/add-rule-for :parsweep *cursor-expression-dialect*)
   (parse/add-rule-for :repeat *cursor-expression-dialect*)
-  (parse/add-rule-for :seq *cursor-expression-dialect*))
+  (parse/add-rule-for :seq *cursor-expression-dialect*)
+  (parse/add-rule-for :cat *cursor-expression-dialect*)
+  (parse/add-rule-for :bound-var *cursor-expression-dialect*))
   
 
 ;;=========================================================================
+
+;;;;
+;;;; reset rules to default parse rules
+(defun parse/reset-rules ()
+  (setf *dialect-rule-map* (make-hash-table))
+  (%add-default-rules))
+
 ;;=========================================================================
 ;;=========================================================================

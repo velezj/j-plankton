@@ -17,17 +17,6 @@
 ;;=========================================================================
 
 ;;;;
-;;;; go from a cursto expression to a cursor
-;;;; (parse then pack)
-(defun cursor-expression->cursor (expr)
-  (%pack-cursor-tree
-   (%parse-cursor-expression
-    expr)))
-    
-
-;;=========================================================================
-
-;;;;
 ;;;; returns the largest number of adjacent elements in sequence for
 ;;;; which the given predicate is true (a streak).
 ;;;; Also returns the start and end positions of the streak in the 
