@@ -4,8 +4,66 @@
 ;;=========================================================================
 
 ;;;;
+;;;; A generic function to parse a cursor expression into a
+;;;; cursor tree given a cursor expression dialect
+(defgeneric %parse-cursor-expression ( expr &key dialect ))
+
+;;;;
+;;;; The implementation version of parsing allowing us to
+;;;; specialize on dialect
+(defgeneric %parse-cursor-expression/impl ( dialect expr ))
+
+;;=========================================================================
+
+;;;;
+;;;; The currently select cursor expression dialect
+(defvar *cursor-expression-dialect* :cursor-dsl)
+
+;;=========================================================================
+
+;;;;
+;;;; a condition when we fail to pars a cursor expression
+(define-condition cursor-expression-parse-failed ()
+  ((dialect
+    :initarg :dialect
+    :reader dialect)
+   (expr
+    :initarg :expr
+    :reader expr)))
+   
+
+;;=========================================================================
+
+
+;;;;
+;;;; foward %parse-cursor-expression keyword argument onto
+;;;; and implementation version so that we can specialize
+;;;; on those
+(defmethod %parse-cursor-expression ( expr
+				     &key
+				       (dialect *cursor-expression-dialect*) )
+  (%parse-cursor-expression/impl dialect expr))
+
+;;=========================================================================
+
+;;;;
+;;;; go from a cursto expression to a cursor
+;;;; (parse then pack)
+(defun cursor-expression->cursor (expr
+				  &key
+				    (dialect *cursor-expression-dialect*))
+  (%pack-cursor-tree
+   (%parse-cursor-expression
+    expr
+    :dialect dialect)))
+
+;;=========================================================================
+
+
+;;;;
 ;;;; Given a cursor-expression, returns the resulting cursor
-(defun %parse-cursor-expression (expr)
+;;;; This is the :dsl1 static cursor dialect
+(defun %parse-cursor-expression-dsl1 (expr)
   (when (null expr)
     (return-from %parse-cursor-expression
       (cursor/range 0 -1 0 -1)))
@@ -49,167 +107,234 @@
 ;;=========================================================================
 
 ;;;;
-;;;; Packing a cursor tree means that we take a cursor object and
-;;;; to to remove redundancies which may have happened because of
-;;;; the simple parser we have for cursor expressions.
-;;;; This is a method based upoin the cursor type.
-;;;; by default we do nothing and just reutnr the original cursor
-;;;;
-;;;; rturns (values <packed-tree> <changed-p>)
-;;;; where changed-p is true iff an actual change (or pakcing) ocurred
-(defmethod %pack-cursor-tree ( cursor &key &allow-other-keys )
-  cursor)
+;;;; Specilized parsing for :dsl1 dialect
+(defmethod %parse-cursor-expression/impl ( (dialect (eql :dsl1)) expr )
+  (%parse-cursor-expression-dsl1 expr))
 
 ;;=========================================================================
 
 ;;;;
-;;;; go from a cursto expression to a cursor
-;;;; (parse then pack)
-(defun cursor-expression->cursor (expr)
-  (%pack-cursor-tree
-   (%parse-cursor-expression
-    expr)))
+;;;; A general dialect parser which looks up 'rules' for the dialect
+;;;; and simply keeps applying them until we get a parse.
+;;;;
+;;;; A ruler is a property list with
+;;;;    :name <rule name as string>
+;;;;    :ruler <function returning (values cursor parsed-p)>
+;;;;
+;;;; The cursor from the first rule whoose parsed-p is true is used
+
+(defvar *dialect-rule-map* (make-hash-table)
+  "a mapping between dialect to an ordered list of rules")
     
+(defmethod %parse-cursor-expression/impl ( dialect expr )
+  (let ((rule-workspace (make-hash-table))
+	(rules (append
+		(first (gethash dialect *dialect-rule-map* nil))
+		(second (gethash dialect *dialect-rule-map* nil))))
+	(cursor nil)
+	(parsed-p nil))
+    
+    ;; loop over rules in order, seeing which one parses
+    ;; th expression first and setting cursor and parsed-p
+    (dolist (rule rules)
+      (multiple-value-bind (r-cursor r-parsed-p)
+	  (handler-case
+	      (funcall (getf rule :rule)
+		       expr rule-workspace)
+	    (t (c) (progn
+		     (warn "Cursor parsing rule ~A in dialect ~A raised condition ~A, ignoring"
+			   (getf rule :name)
+			   dialect
+			   c))))
+	(when r-parsed-p
+	  (setf cursor r-cursor
+		parsed-p r-parsed-p)
+	  (return))))
+    
+    ;; see if we have a parse or raise condition
+    (unless parsed-p
+      (error 'cursor-expression-parse-failed
+	     :dialect dialect
+	     :expr expr))
+    cursor))
 
 ;;=========================================================================
 
 ;;;;
-;;;; returns the largest number of adjacent elements in sequence for
-;;;; which the given predicate is true (a streak).
-;;;; Also returns the start and end positions of the streak in the 
-;;;; next two values 
-;;;;  returns: (values <n> <start> <end> )
-(defun largest-streak (pred seq)
-  (let ((streak)
-	(max-streak)
-	(in-streak nil))
-    (setf (getf streak :n) 0)
-    (setf (getf streak :start) nil)
-    (setf (getf streak :end) nil)
-    (setf (getf max-streak :n) 0)
-    (setf (getf max-streak :start) nil)
-    (setf (getf max-streak :end) nil)
-    (loop for x in seq
-	  for i upto (length seq)
-	  do
-	     (let ((found (funcall pred x)))
-	       (if (not found)
-		   (when in-streak
-		     (progn
-		       (setf in-streak nil)
-		       (when (> (getf streak :n)
-				(getf max-streak :n))
-			 (setf max-streak
-			       (copy-seq streak)))
-		       (setf (getf streak :n) 0)
-		       (setf (getf streak :start) nil)
-		       (setf (getf streak :end) nil)))
-		   (if in-streak
-		       (progn
-			 (incf (getf streak :n))
-			 (incf (getf streak :end)))
-		       (progn
-			 (setf in-streak t)
-			 (setf (getf streak :start) i)
-			 (setf (getf streak :end) i)
-			 (setf (getf streak :n) 1))))))
-    (when (> (getf streak :n)
-	     (getf max-streak :n))
-      (setf max-streak streak))
-    (values
-     (getf max-streak :n)
-     (getf max-streak :start)
-     (getf max-streak :end))))
+;;;; Add a rule for a given dialect (defaults to current dialect)
+;;;;
+;;;; The position is one of
+;;;;     :end (default) at the ned of normal rules
+;;;;     :start at the beginning of normal ruler
+;;;;     :last-rule at end of last rules
+(defun parse/add-rule (name rule-f
+		       &key
+			 (dialect *cursor-expression-dialect*)
+			 (position :end) )
+  (let ((rule
+	 (list :name name
+	       :rule rule-f)))
+    (ecase position
+      (:end
+       (setf (gethash dialect *dialect-rule-map*)
+	     (list
+	      (append (first (gethash dialect *dialect-rule-map*))
+		      (list rule))
+	      (second (gethash dialect *dialect-rule-map*)))))
+      (:start
+       (setf (gethash dialect *dialect-rule-map*)
+	     (list
+	      (append (list rule)
+		      (first (gethash dialect *dialect-rule-map*)))
+	      (second (gethash dialect *dialect-rule-map*)))))
+      (:last-rule
+       (setf (gethash dialect *dialect-rule-map*)
+	     (list
+	      (first (gethash dialect *dialect-rule-map*))
+	      (append
+	       (second (gethash dialect *dialect-rule-map*))
+	       (list rule))))))))
 
 ;;=========================================================================
 
 ;;;;
-;;;; Compsing cursors should pack their inner cursors
-;;;; This should be chained in a call to call-next-method
-(defmethod %pack-cursor-tree ( (comp composing-cursor-t) &key )
-  (format t "composing pack called: ~A~%" comp)
-  (let ((any-changes nil))
-    (replace 
-     (original-cursors comp)
-     (mapcar #'(lambda (x)
-		 (multiple-value-bind (packed changed-p)
-		     (%pack-cursor-tree x)
-		   (when changed-p
-		     (setf any-changes t))
-		   packed))
-	     (original-cursors comp)))
-    (if any-changes
-	(%pack-cursor-tree comp)
-	(values
-	 comp
-	 nil))))
+;;;; A generic function to add a parse rule based on the type of
+;;;; cursor
+(defgeneric parse/add-rule-for (cursor-type-or-name dialect))
 
 ;;=========================================================================
-
 
 ;;;;
-;;;; Pack concatenation cursors
-(defmethod %pack-cursor-tree ( (cat cat-cursor-t) &key (phase 0) )
-
-  ;; only do so much packing
-  (when (> phase 100)
-    (format t "limiting phase reached: ~A~%" phase)
-    (return-from %pack-cursor-tree (values cat nil)))
-
-  ;; check if we only have a single inner cursor, in which case
-  ;; we are redundant
-  (when (= (length (original-cursors cat)) 1)
-    (return-from %pack-cursor-tree
-      (%pack-cursor-tree (first (original-cursors cat)))))
-
-  ;; ok, now condense sequence cursors
-  (multiple-value-bind
-	(n start end)
-      (largest-streak #'(lambda (x)
-			  (typep x 'seq-cursor-t))
-		      (original-cursors cat))
-    (format t "largest seq-cursor streak ~A (~A ~A)~%"
-	    n start end)
-    (if (> n 1)
-	(let* ((new-seq
-		 (alexandria:mappend 
-		  #'seq
-		  (subseq (original-cursors cat)
-			  start
-			  (1+ end))))
-	       (new-cursors (copy-seq (original-cursors cat)))
-	       (sub-cursors
-		 (append
-		  (subseq new-cursors
-			  0
-			  start)
-		  (list (cursor/seq new-seq))
-		  (subseq new-cursors
-			  (1+ end)))))
-	  (format t "new seq: ~A~%" new-seq)
-	  (format t "copied cursors: ~A~%" new-cursors)
-	  (format t "substituted cursor: ~A~%" sub-cursors)
-	  (values
-	   (%pack-cursor-tree
-	    (apply #'cursor/cat sub-cursors)
-	    :phase (1+ phase))
-	   t))
-	(if (next-method-p)
-	    (call-next-method cat)
-	    (values cat nil)))))
-
-
+;;;; Add a default rule for an object by fowarding to
+;;;; adding by it's type
+(defmethod parse/add-rule-for ( object dialect )
+  (parse/add-rule-for (type-of object) dialect))
 
 ;;=========================================================================
+
+;;;;
+;;;; Add default parse rule for range-cursor-t
+(defmethod parse/add-rule-for ( (type (eql 'range-cursor-t)) dialect )
+  (parse/add-rule-for :range dialect))
+(defmethod parse/add-rule-for ( (name (eql :range)) dialect )
+  (parse/add-rule
+   :range
+   #'(lambda (expr rules-workspace)
+       (unless (and (listp expr)
+		    (member (first expr) '(:range #\: \: :|:|)))
+	 (values nil nil))
+       (format t "parse/range: ~S expr=~S ~%"
+	       (and (listp expr)
+		    (member (first expr) '(:range #\: \: :|:|)))
+	       expr)
+       (values
+	(apply #'cursor/range (cdr expr))
+	t))))
+
 ;;=========================================================================
+
+;;;;
+;;;; Add default parse rule for sweeps
+(defmethod parse/add-rule-for ( (name (eql ':sweep)) dialect )
+  (parse/add-rule
+   :sweep
+   #'(lambda (expr rules-workspace)
+       (unless (and (listp expr)
+		    (member (first expr) '(:sweep #\x :x :#)))
+	 (values nil nil))
+       (values
+	(apply #'cursor/sweep
+	       (mapcar #'(lambda (x)
+			   (%parse-cursor-expression x :dialect dialect))
+		       (cdr expr)))
+	t))))
+
 ;;=========================================================================
+
+;;;;
+;;;; Add default parse rule for parallel sweeps
+(defmethod parse/add-rule-for ( (name (eql ':parsweep)) dialect )
+  (parse/add-rule
+   :parsweep
+   #'(lambda (expr rules-workspace)
+       (unless (and (listp expr)
+		    (member (first expr) '(:parsweep :par #\| :||)))
+	 (values nil nil))
+       (values
+	(apply #'cursor/parallel-sweep
+	       (mapcar #'(lambda (x)
+			   (%parse-cursor-expression x :dialect dialect))
+		       (cdr expr)))
+	t))))
+
+
 ;;=========================================================================
+
+;;;;
+;;;; Add default parse rule for repeat
+(defmethod parse/add-rule-for ( (type (eql 'repeat-cursor-t)) dialect )
+  (parse/add-rule-for :repeat dialect))
+(defmethod parse/add-rule-for ( (name (eql ':repeat)) dialect )
+  (parse/add-rule
+   :repeat
+   #'(lambda (expr rules-workspace)
+       (unless (and (listp expr)
+		    (member (first expr) '(:repeat)))
+	 (values nil nil))
+       (values
+	(if (and (> (length (cdr expr)) 2)
+		 (eql (cadr expr) :max))
+	    (cursor/repeat (%parse-cursor-expression (cdddr expr)
+						     :dialect dialect)
+			   :max-count (caddr expr) )
+	    (cursor/repeat (%parse-cursor-expression (cdr expr)
+						     :dialect dialect)))
+	t))))
+
+
 ;;=========================================================================
+
+;;;;
+;;;; Add parse rules for seq cursors
+;;;; This will add two rules, a normal and a last rule
+(defmethod parse/add-rule-for ( (type (eql 'seq-cursor-t)) dialect )
+  (parse/add-rule-for :seq dialect))
+(defmethod parse/add-rule-for ( (name (eql :seq)) dialect )
+
+  ;; normal rule
+  (parse/add-rule
+   :seq/seq
+   #'(lambda (expr rules-workspace)
+       (unless (and (listp expr)
+		    (member (first expr) '(:seq)))
+	 (values nil nil))
+       (values
+	(cursor/seq (cdr expr))
+	t)))
+
+  ;; normal rule
+  (parse/add-rule
+   :seq/quote
+   #'(lambda (expr rules-workspace)
+       (unless (and (listp expr)
+		    (member (first expr) '(quote)))
+	 (values nil nil))
+       (values
+	(cursor/seq expr)
+	t))))
+  
+
+
 ;;=========================================================================
-;;=========================================================================
-;;=========================================================================
-;;=========================================================================
-;;=========================================================================
+
+(defun %add-default-rules ()
+  (parse/add-rule-for :range *cursor-expression-dialect*)
+  (parse/add-rule-for :sweep *cursor-expression-dialect*)
+  (parse/add-rule-for :parsweep *cursor-expression-dialect*)
+  (parse/add-rule-for :repeat *cursor-expression-dialect*)
+  (parse/add-rule-for :seq *cursor-expression-dialect*))
+  
+
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
