@@ -47,6 +47,9 @@
 ;;;; the simple parser we have for cursor expressions.
 ;;;; This is a method based upoin the cursor type.
 ;;;; by default we do nothing and just reutnr the original cursor
+;;;;
+;;;; rturns (values <packed-tree> <changed-p>)
+;;;; where changed-p is true iff an actual change (or pakcing) ocurred
 (defmethod %pack-cursor-tree ( cursor &key &allow-other-keys )
   cursor)
 
@@ -107,10 +110,21 @@
 ;;;; This should be chained in a call to call-next-method
 (defmethod %pack-cursor-tree ( (comp composing-cursor-t) &key )
   (format t "composing pack called: ~A~%" comp)
-  (replace 
-   (original-cursors comp)
-   (mapcar #'%pack-cursor-tree (original-cursors comp)))
-  comp)
+  (let ((any-changes nil))
+    (replace 
+     (original-cursors comp)
+     (mapcar #'(lambda (x)
+		 (multiple-value-bind (packed changed-p)
+		     (%pack-cursor-tree x)
+		   (when changed-p
+		     (setf any-changes t))
+		   packed))
+	     (original-cursors comp)))
+    (if any-changes
+	(%pack-cursor-tree comp)
+	(values
+	 comp
+	 nil))))
 
 ;;=========================================================================
 
@@ -120,9 +134,9 @@
 (defmethod %pack-cursor-tree ( (cat cat-cursor-t) &key (phase 0) )
 
   ;; only do so much packing
-  (when (> phase 10)
+  (when (> phase 100)
     (format t "limiting phase reached: ~A~%" phase)
-    (return-from %pack-cursor-tree cat))
+    (return-from %pack-cursor-tree (values cat nil)))
 
   ;; check if we only have a single inner cursor, in which case
   ;; we are redundant
@@ -157,12 +171,14 @@
 	  (format t "new seq: ~A~%" new-seq)
 	  (format t "copied cursors: ~A~%" new-cursors)
 	  (format t "substituted cursor: ~A~%" sub-cursors)
-	  (%pack-cursor-tree
-	   (apply #'cursor/cat sub-cursors)
-	   :phase (1+ phase)))
+	  (values
+	   (%pack-cursor-tree
+	    (apply #'cursor/cat sub-cursors)
+	    :phase (1+ phase))
+	   t))
 	(if (next-method-p)
 	    (call-next-method cat)
-	    cat))))
+	    (values cat nil)))))
 
 
 
