@@ -326,7 +326,8 @@
 		       (not (fboundp expr)))
 		  (numberp expr)
 		  (characterp expr)
-		  (stringp expr))
+		  (stringp expr)
+		  (keywordp expr))
 	   (return-from rule (values nil nil)))
 	 (values
 	  (cursor/seq (list expr))
@@ -416,13 +417,82 @@
 			      x :dialect dialect))
 			 expr))
 	  t)))))
+
+
+;;=========================================================================
+
+;;;;
+;;;; Add rules for general tranform cursors
+(defmethod parse/add-rule-for ( (type (eql 'transform-cursor-t)) dialect )
+  (parse/add-rule-for :transform dialect ))
+(defmethod parse/add-rule-for ( (name (eql :transform)) dialect )
   
+  (parse/add-rule
+   :transform
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:f :trans :transform)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (apply #'cursor/transform
+		 (cadr expr)
+		 (mapcar #'(lambda (x)
+			     (%parse-cursor-expression 
+			      x
+			      :dialect dialect))
+			 (cddr expr)))
+	  t))))
+
+  (parse/add-rule
+   :transform-to-last
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:f-to-last :trans-to-last :transform-to-last)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (apply #'cursor/transform-to-last
+		 (cadr expr)
+		 (mapcar #'(lambda (x)
+			     (%parse-cursor-expression 
+			      x
+			      :dialect dialect))
+			 (cddr expr)))
+	  t)))))
+
+
+;;=========================================================================
+
+;;;;
+;;;; add rule for label
+(defmethod parse/add-rule-for ( (name (eql :label)) dialect )
+  (parse/add-rule
+   :label
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:label :labels)))
+	   (return-from rule (values nil nil)))
+	 (let ((the-labels
+		 (if (listp (second expr))
+		     (eval `(list ,@(second expr)))
+		     (eval (second expr)))))
+	   (values
+	    (cursor/label 
+	     the-labels 
+	     (%parse-cursor-expression
+	      (third expr)
+	      :dialect dialect))
+	    t))))))
 
 
 ;;=========================================================================
 
 (defun %add-default-rules ()
   (parse/add-rule-for :cursor *cursor-expression-dialect*)
+  (parse/add-rule-for :transform *cursor-expression-dialect*)
+  (parse/add-rule-for :label *cursor-expression-dialect*)
   (parse/add-rule-for :range *cursor-expression-dialect*)
   (parse/add-rule-for :sweep *cursor-expression-dialect*)
   (parse/add-rule-for :parsweep *cursor-expression-dialect*)

@@ -602,6 +602,81 @@
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
+
+;;;;
+;;;; a filtering cursor which applies a function to a set of cursor 
+;;;; an olny returns those elements for which it returns true
+;;;;
+;;;; This is a subclass of transform-cursor-t, so it has a
+;;;; transform function which is applied *before* the filter
+;;;; function, then the filter function is called with thre
+;;;; resulting transformed cursor value
+(defclass filter-cursor-t (transform-cursor-t)
+  ((filter-f
+    :initarg :filter-f
+    :reader filter-f)))
+
+(defmethod print-object ( (filter filter-cursor-t) stream )
+  (format stream "#<filter ~A Trans-F=~A Filter=~A ~A>"
+	  (original-cursors filter)
+	  (transform-f filter)
+	  (filter-f filter)
+	  (if (done-p filter) "*" "")))
+
+;;=========================================================================
+
+(defmethod value ( (filter filter-cursor-t) )
+  (do
+   ()
+   ((or
+     (done-p filter)
+     (funcall (filter-f filter) (call-next-method)))
+    (call-next-method))
+    (next filter)))
+
+;;=========================================================================
+
+
+(defmethod next ( (filter filter-cursor-t) )
+  (when (done-p filter)
+    (error 'cursor-finished-condition
+	   :cursor filter))
+  
+  ;; ok, call next on all of the inner cursors until
+  ;; one of two thigs happens:
+  ;;   filter-f of values returns true
+  ;;   one of the cursors is done
+  (let ((old-value (value filter)))
+    (call-next-method)
+    (do
+     ()
+     ((or
+       (done-p filter)
+       (funcall (filter-f filter) (value filter)))
+      nil)
+      (call-next-method))
+    (values
+     old-value
+     (done-p filter))))
+    
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
@@ -706,6 +781,35 @@
 ;;=========================================================================
 
 ;;;;
+;;;; Make a filtering cursor.
+;;;; Notes: 
+;;;;     the transform function is applied *before* the filter
+;;;;     function.
+(defun remove-key (list key)
+  (let ((key-pos
+	  (position key list)))
+    (if key-pos
+	(append
+	 (subseq list
+		 0 key-pos)
+	 (subseq list
+		 (+ key-pos 2)))
+	list)))
+
+(defun cursor/filter (&key filter-func 
+			cursors 
+			(trans-func #'list))
+  (make-instance 'filter-cursor-t
+		 :cursors cursors
+		 :f trans-func
+		 :filter-f filter-func
+		 :termination :first))
+
+
+;;=========================================================================
+
+
+;;;;
 ;;;; Make a labeled cursor, which labels the results of a cursor
 ;;;; with a set of labels, returning and association list with
 ;;;; (label value) pairs.
@@ -717,7 +821,7 @@
       (cursor/transform
        #'(lambda (val)
 	   (mapcar #'(lambda (label)
-		       (cons label val))
+		       (list label val))
 		   label-list))
        cursor)
       (cursor/transform
