@@ -508,7 +508,9 @@
 		(etypecase (second expr)
 		  (list
 		   (coerce (eval (second expr)) 'function))
-		  ((symbol function)
+		  (function
+		   f)
+		  (symbol
 		   (coerce (second expr) 'function)))))
 	   (values
 	    (if (= 1 (length (cddr expr)))

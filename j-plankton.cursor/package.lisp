@@ -22,6 +22,7 @@
    #:cursor/transform
    #:cursor/transform-to-last
    #:repeat
+   #:cursor/filter
 
    ;; sweeps
    #:cursor/parallel-sweep

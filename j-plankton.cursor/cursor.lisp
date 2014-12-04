@@ -73,7 +73,13 @@
 ;;;;
 ;;;; the base cursor type. Any cursors should substype from this
 (defclass cursor-t ()
-  ())
+  ((properties
+    :initarg :properties
+    :initform nil
+    :accessor properties
+    :documentation
+    "a properties-plist with properties and their values")))
+   
 
 ;;;;
 ;;;; base cursor type fo compositional cursors
@@ -81,6 +87,33 @@
   ((original-cursors
     :initarg :cursors
     :reader original-cursors)))
+
+;;=========================================================================
+
+;;;;
+;;;; Add a property to a cursor.
+;;;; If the property already existed, update it's value
+(defun cursor/add-property (cursor key value)
+  (setf (properties cursor)
+	(append (list key value)
+		(alexandria:remove-from-plist
+		 (properties cursor)
+		 key))))
+
+;;=========================================================================
+
+;;;;
+;;;; returns the properties class for a cursor
+(defun cursor/properties-class (cursor)
+  (cursor-properties-class (mapcar #'car (alexandria:plist-alist 
+					  (properties cursor)))))
+
+;;=========================================================================
+
+;;;;
+;;;; returns the properties class object
+(defun cursor/properties-class-object (cursor)
+  (cursor-properties-class-object (properties cursor)))
 
 ;;=========================================================================
 ;;=========================================================================
