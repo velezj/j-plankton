@@ -489,9 +489,43 @@
 
 ;;=========================================================================
 
+;;;;
+;;;; Add a prase rule for filter cursors
+(defmethod parse/add-rule-for ( (type filter-cursor-t) dialect )
+  (parse/add-rule-for :filter dialect))
+(defmethod parse/add-rule-for ( (name (eql :filter)) dialect )
+  (parse/add-rule
+   :filter
+   #'(lambda (expr rules-workspace)
+       (block rule
+	 (unless (and (listp expr)
+		      (member (first expr) '(:filter :where)))
+	   (return-from rule (values nil nil)))
+	 (values
+	  (if (= 1 (length (cddr expr)))
+	      (cursor/filter
+	       :filter-func (coerce (second expr) 'function)
+	       :trans-func #'identity
+	       :cursors (mapcar #'(lambda (x)
+				    (%parse-cursor-expression
+				     x :dialect dialect))
+				(cddr expr)))
+	      (cursor/filter
+	       :filter-func (coerce (second expr) 'function)
+	       :trans-func #'list
+	       :cursors (mapcar #'(lambda (x)
+				    (%parse-cursor-expression
+				     x :dialect dialect))
+				(cddr expr))))
+	  t)))))
+	      
+
+;;=========================================================================
+
 (defun %add-default-rules ()
   (parse/add-rule-for :cursor *cursor-expression-dialect*)
   (parse/add-rule-for :transform *cursor-expression-dialect*)
+  (parse/add-rule-for :filter *cursor-expression-dialect*)
   (parse/add-rule-for :label *cursor-expression-dialect*)
   (parse/add-rule-for :range *cursor-expression-dialect*)
   (parse/add-rule-for :sweep *cursor-expression-dialect*)
