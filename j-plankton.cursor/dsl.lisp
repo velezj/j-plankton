@@ -359,16 +359,11 @@
    :bound-var
    #'(lambda (expr rules-workspace)
        (block rule
-	 (format t "bound-var, expr=~S (~A,~A)~%" 
-		 expr
-		 (symbolp expr)
-		 (and (symbolp expr)
-		      (boundp expr)))
-	 (unless (and (symbolp expr)
-		      (boundp expr))
+	 (unless (and
+		  (not (keywordp expr))
+		  (symbolp expr)
+		  (boundp expr))
 	   (return-from rule (values nil nil)))
-	 (format t "bound-var, expr-value=~S~%"
-		 (symbol-value expr))
 	 (values
 	  (%parse-cursor-expression
 	   (symbol-value expr)

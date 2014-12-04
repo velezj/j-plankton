@@ -63,7 +63,7 @@
     :reader cursor))
   (:report
    (lambda (condition stream)
-     (format stream "cursor ~A finished but you tries to access it without (reset..)!"))))
+     (format stream "cursor ~A finished but you tries to access it without (reset..)!" (cursor condition)))))
 
 ;;=========================================================================
 ;;=========================================================================
