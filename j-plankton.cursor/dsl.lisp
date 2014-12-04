@@ -501,24 +501,33 @@
 	 (unless (and (listp expr)
 		      (member (first expr) '(:filter :where)))
 	   (return-from rule (values nil nil)))
-	 (values
-	  (if (= 1 (length (cddr expr)))
-	      (cursor/filter
-	       :filter-func (coerce (second expr) 'function)
-	       :trans-func #'identity
-	       :cursors (mapcar #'(lambda (x)
-				    (%parse-cursor-expression
-				     x :dialect dialect))
-				(cddr expr)))
-	      (cursor/filter
-	       :filter-func (coerce (second expr) 'function)
-	       :trans-func #'list
-	       :cursors (mapcar #'(lambda (x)
-				    (%parse-cursor-expression
-				     x :dialect dialect))
-				(cddr expr))))
-	  t)))))
-	      
+	 (format t "filter, f-expr=~S (type=~S)~%"
+		 (second expr)
+		 (type-of (second expr)))
+	 (let ((f
+		(etypecase (second expr)
+		  (list
+		   (coerce (eval (second expr)) 'function))
+		  ((symbol function)
+		   (coerce (second expr) 'function)))))
+	   (values
+	    (if (= 1 (length (cddr expr)))
+		(cursor/filter
+		 :filter-func f
+		 :trans-func #'identity
+		 :cursors (mapcar #'(lambda (x)
+				      (%parse-cursor-expression
+				       x :dialect dialect))
+				  (cddr expr)))
+		(cursor/filter
+		 :filter-func f
+		 :trans-func #'list
+		 :cursors (mapcar #'(lambda (x)
+				      (%parse-cursor-expression
+				       x :dialect dialect))
+				  (cddr expr))))
+	    t))))))
+  
 
 ;;=========================================================================
 
