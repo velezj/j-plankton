@@ -241,21 +241,23 @@
 
 ;;=========================================================================
 
+(defun %transform/raw-value ( tc )  
+  (let ((original-values
+	 (mapcar #'(lambda (cursor default)
+		     (if (done-p cursor)
+			 default
+			 (value cursor)))
+		 (original-cursors tc)
+		 (default-values tc))))
+    (apply (transform-f tc) original-values)))
+
 
 (defmethod value ( (tc transform-cursor-t))
   (when (done-p tc)
     (error 'cursor-finished-condition
 	   "Cursor ~A is finished but you tried to access it's (value...)"
 	   :cursor tc))
-  (let ((original-values
-	  (mapcar #'(lambda (cursor default)
-		      (if (done-p cursor)
-			  default
-			  (value cursor)))
-		  (original-cursors tc)
-		  (default-values tc))))
-    (apply (transform-f tc) original-values)))
-
+  (%transform/raw-value tc))
 
 ;;=========================================================================
 
@@ -625,6 +627,31 @@
 
 ;;=========================================================================
 
+(defmethod clone ( (filter filter-cursor-t) )
+  (let ((copy (call-next-method)))
+    (setf (slot-value copy 'filter-f)
+	  (filter-f filter))
+    copy))   
+
+;;=========================================================================
+
+(defmethod done-p ( (filter filter-cursor-t) )
+  (if (call-next-method)
+      (return-from done-p t))
+  (do
+   ()
+   ((or
+     (call-next-method filter)
+     (funcall (filter-f filter) (%transform/raw-value filter)))
+    (call-next-method))
+    (mapcar #'next
+	    (original-cursors filter))))
+
+    
+
+
+;;=========================================================================
+
 (defmethod value ( (filter filter-cursor-t) )
   (do
    ()
@@ -646,13 +673,15 @@
   ;; one of two thigs happens:
   ;;   filter-f of values returns true
   ;;   one of the cursors is done
-  (let ((old-value (value filter)))
+  (let ((old-value (value filter)))     ; safe to call (value ) since (done-p)
+					; was called first which means we will
+					; no go into infinite loop here
     (call-next-method)
     (do
      ()
      ((or
        (done-p filter)
-       (funcall (filter-f filter) (value filter)))
+       (funcall (filter-f filter) (%transform/raw-value filter)))
       nil)
       (call-next-method))
     (values
@@ -796,7 +825,8 @@
 		 (+ key-pos 2)))
 	list)))
 
-(defun cursor/filter (&key filter-func 
+(defun cursor/filter (&key
+			filter-func 
 			cursors 
 			(trans-func #'list))
   (make-instance 'filter-cursor-t
