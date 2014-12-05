@@ -56,17 +56,22 @@
 		   #'(lambda (x)
 		       (list (string x) "/"))
 		   sorted-props)))
-	 (individual-classes
-	   (mapcar #'(lambda (x)
-		       (cursor-properties-class (list x)))
-		   sorted-props))
+	 (super-classes
+	   (alexandria:flatten
+	    (let ((classes nil))
+	      (alexandria:map-combinations 
+	       #'(lambda (comb)
+		   (push (cursor-properties-class (sort (alexandria:ensure-list comb) #'string<)) classes))
+	       sorted-props
+	       :length (1- (length sorted-props)))
+	      classes)))
 	 (class-def
-	   `(defclass ,class-name ,individual-classes
+	   `(defclass ,class-name ,super-classes
 	      ())))
     (format t "making composite prop-class~%")
     (format t "name=~S, subpers=~S, def=~S~%"
 	    class-name
-	    individual-classes
+	    super-classes
 	    class-def)
     (eval class-def)))
 
