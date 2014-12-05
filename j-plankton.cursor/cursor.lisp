@@ -94,11 +94,16 @@
 ;;;; Add a property to a cursor.
 ;;;; If the property already existed, update it's value
 (defun cursor/add-property (cursor key value)
-  (setf (properties cursor)
-	(append (list key value)
-		(alexandria:remove-from-plist
-		 (properties cursor)
-		 key))))
+  (multiple-value-bind (found-prop old-value tail)
+      (get-properties (properties cursor) (list key))
+    (setf (properties cursor)
+	  (append (list key value)
+		  (alexandria:remove-from-plist
+		   (properties cursor)
+		   key)))
+    (values
+     (not found-prop)
+     old-value)))
 
 ;;=========================================================================
 

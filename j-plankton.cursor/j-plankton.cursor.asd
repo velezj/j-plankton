@@ -7,6 +7,7 @@
   :components ((:file "package")
 	       (:file "cursor-properties")
 	       (:file "cursor")
+	       (:file "common-properties")
 	       (:file "properties-method")
 	       (:file "cursor-tree")
 	       (:file "dsl")

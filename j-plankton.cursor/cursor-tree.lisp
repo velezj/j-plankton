@@ -144,3 +144,31 @@
 
 
 ;;=========================================================================
+
+;;;;
+;;;; We can also cascade properties for a cursro-tree, which
+;;;; computes and sets the properties of the nodes (cursors)
+;;;; of the tree given those already set so far (usually by leaft nodes)
+(defgeneric cascade-properties (cursor))
+
+;;=========================================================================
+
+;;;;
+;;;; By default, no properties cascade so nothing to do
+(defmethod cascade-properties (cursor)
+  (values cursor nil))
+
+;;=========================================================================
+
+;;;;
+;;;; some range cursors are dense
+(defmethod cascade-properties ( (cursor range-cursor-t) )
+  (if (eql (step-f cursor) 1)
+      (let ((added
+	     (cursor/add-property cursor :prop/is-dense t)))
+	(values cursor added))
+      (values nil nil)))
+
+	     
+
+;;=========================================================================
