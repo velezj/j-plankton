@@ -168,16 +168,25 @@
 ;;;; Craete a new method based on the properties of
 ;;;; an object given to it
 (defmacro define-property-method (name
-				  (var props)
+				  var-props
 				  lambda-list
 				  &body body)
-  (let* ((props-class
-	  (if (null props)
-	      't
-	      (properties-class props)))
+  (let* ((props-classes
+	  (mapcar #'(lambda (var-props)
+		      (destructuring-bind (var props) var-props
+			(declare (ignore var))
+			(if (null props)
+			    't
+			    (%properties-class props))))
+		  var-props))
+	 (props-vars
+	  (mapcar #'(lambda (var-prop)
+		      (jpu:intern+ *package* (first var-prop) :/properties))
+		  var-props))
 	 (modified-lambda-list
-	  (cons `(props ,props-class)
-		lambda-list))
+	  (append
+	   (mapcar #'list props-vars props-classes)
+	   lambda-list))
 	 (impl-method-symbol
 	  (jpu:intern+ *package* name :/property-impl))
 	 (impl-fowarding-arguments
@@ -187,7 +196,9 @@
 	 (interface-method-def
 	  `(defmethod ,name ,lambda-list
 	     (,impl-method-symbol
-	      (properties-class-object ,var)
+	      ,@(mapcar #'(lambda (var)
+			    `(properties-class-object ,var))
+			props-vars)
 	      ,@impl-fowarding-arguments)))
 	 (impl-method-def
 	  `(defmethod ,impl-method-symbol ,modified-lambda-list

@@ -13,10 +13,29 @@ object with properties :a :c :d both are objects with porperties :a
 :b.  Similarly, specializing a method for objects with :a :b
 properties should allow to be a valid method for eather object.  That
 being said, methods specialing the most (in terms of number) of
-properties of an pbject should be the most specialized.
+properties of an object should be the most specialized.
 
 
-Interna Details (the how!)
+
+Property Inheritance
+====================
+
+Just like the regular class of an object has a sence of a precedence list, the properties of an object *alos* have a sense of a precendence list.  Here, we ensure that subsets of properties are parents (super-types) of sets of properties.  Here is an example:
+
+     * props1 = a,b   ;; two properties named a,b
+     * props2 = a,c
+     * props3 = a,b,c
+
+Here we have three objects with different properties.  We want the following:
+
+(a) -> (a b) -> (a b c)
+
+So, the probs3 should have a superclass of props1, and eventually of (a), (b), and (c) top-level superclasses for individual properties.  This is a subset-is-superclass we ensure.
+
+What does thie means
+
+
+Internal Details (the how!)
 ==========================
 
 Internally, we in fact create a completely separate class hiearchy for
