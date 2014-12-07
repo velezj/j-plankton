@@ -21,7 +21,7 @@
 (defgeneric properties-class (obj))
 (defmethod properties-class (obj)
   (%properties-class
-   (mapcar #'first (properties obj))))
+   (mapcar #'first (alexandria:plist-alist (properties obj)))))
 
 ;;=========================================================================
 

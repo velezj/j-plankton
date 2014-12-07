@@ -106,21 +106,6 @@
      old-value)))
 
 ;;=========================================================================
-
-;;;;
-;;;; returns the properties class for a cursor
-(defun cursor/properties-class (cursor)
-  (cursor-properties-class (mapcar #'car (alexandria:plist-alist 
-					  (properties cursor)))))
-
-;;=========================================================================
-
-;;;;
-;;;; returns the properties class object
-(defun cursor/properties-class-object (cursor)
-  (cursor-properties-class-object (properties cursor)))
-
-;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
