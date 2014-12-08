@@ -1,4 +1,3 @@
-
 (in-package #:j-plankton.cursor)
 
 ;;=========================================================================
@@ -870,17 +869,20 @@
 ;;;; If the label is not a list of labels, we return a single
 ;;;; pairing of (label value) rather than a ssociation lisst
 (defun cursor/label (label-list cursor)
-  (if (listp label-list)
-      (cursor/transform
-       #'(lambda (val)
-	   (mapcar #'(lambda (label)
-		       (list label val))
-		   label-list))
-       cursor)
-      (cursor/transform
-       #'(lambda (val)
-	   (list label-list val))
-       cursor)))
+  (let ((c
+	 (if (listp label-list)
+	     (cursor/transform
+	      #'(lambda (val)
+		  (mapcar #'(lambda (label)
+			      (list label val))
+			  label-list))
+	      cursor)
+	     (cursor/transform
+	      #'(lambda (val)
+		  (list label-list val))
+	      cursor))))
+    (cursor/add-property c prop/is-labeled t)
+    c))
   
 
 ;;=========================================================================

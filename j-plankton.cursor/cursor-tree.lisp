@@ -146,6 +146,83 @@
 ;;=========================================================================
 
 ;;;;
+;;;; Autodetect properties for a cursor-tree
+;;;; Generally this is done for leaf nodes, and tehn we "cascade"
+;;;; the properties of the leaf nodes upwars usign cascade-properties
+;;;;
+;;;; returns (values cursor detected-p)
+(defgeneric auto-detect-properties (cursor))
+
+;;=========================================================================
+
+;;;;
+;;;; Defautl autodetect does nothing
+(defmethod auto-detect-properties (cursor)
+  (values cursor nil))
+
+;;=========================================================================
+
+;;;;
+;;;; auto-detect range-cursor-t properties
+(defmethod auto-detect-properties ( (range range-cursor-t) )
+  (let ((detected nil))
+
+    ;; dense ranges
+    (when (eql 1 (step-f range))
+      (let ((new-p
+	     (cursor/add-property range prop/is-dense t)))
+	(setf detected
+	      (or detected new-p))))
+
+    ;; ranges are by default uniqeu
+    (let ((new-p
+	   (cursor/add-property range prop/is-unique-valued t)))
+      (setf detected
+	    (or detected new-p)))
+
+    ;; return
+    (values range detected)))
+
+
+;;=========================================================================
+
+;;;;
+;;;; auto-detect properties for seq-cursor-t
+(defmethod auto-detect-properties ( (seq seq-cursor-t) )
+  (let ((detected nil))
+
+    ;; check uniqeueness of sequence
+    (when (= (length (seq seq))
+	     (length (remove-duplicates (seq seq))))
+      (setf detected
+	    (or detected
+		(cursor/add-property seq prop/is-unique-valued t))))
+
+    (values seq detected)))
+
+;;=========================================================================
+
+;;;;
+;;;; autodetect for composing cusrots detects inner
+(defmethod auto-detect-properties ( (cursor composing-cursor-t) )
+  (values
+   cursor
+   (some #'identity
+	 (mapcar #'(lambda (c)
+		     (multiple-value-bind (c new-p)
+			 (auto-detect-properties c)
+		       new-p))
+		 (original-cursors cursor)))))
+
+;;=========================================================================
+
+;;=========================================================================
+
+
+
+
+
+;;;;
 ;;;; We can also cascade properties for a cursro-tree, which
 ;;;; computes and sets the properties of the nodes (cursors)
 ;;;; of the tree given those already set so far (usually by leaft nodes)
@@ -161,14 +238,82 @@
 ;;=========================================================================
 
 ;;;;
-;;;; some range cursors are dense
-(defmethod cascade-properties ( (cursor range-cursor-t) )
-  (if (eql (step-f cursor) 1)
-      (let ((added
-	     (cursor/add-property cursor :prop/is-dense t)))
-	(values cursor added))
-      (values nil nil)))
+;;;; The interface to calculate the properties in a property tree
+;;;; gnereally this will jsut be a call to auto-detect-properties
+;;;; then cascade-properties
+(defgeneric materialzie-properties (cursor))
 
+(defmethod materialzie-properties (cursor)
+  (cascade-properties
+   (auto-detect-properties
+    cursor)))
+
+;;=========================================================================
+
+;;;;
+;;;; simplified cascading of properties be defninng
+;;;; "rules" of when a particular property cascades given
+;;;; a cursor  and a property
+(defmethod cascade-property-rule (cursor property)
+  nil)
 	     
 
+;;=========================================================================
+
+;;;;
+;;;; compsite cursor by default use the cascade property rules defined
+(defmethod cascade-properties ( (cursor composing-cursor-t) )
+
+  ;; fetch all properties from cascaded inner cursor
+  (let ((props
+	 (remove-duplicates
+	  (alexandria:flatten
+	   (mapcar #'(lambda (c)
+		       (mapcar #'first
+			       (alexandria:plist-alist
+				(properties
+				 (cascade-properties c)))))
+		   (original-cursors cursor))))))
+
+    ;; ok, now go trough each property and it's rule to see if
+    ;; we cascade
+    (let ((cascaded nil))
+      (dolist (prop props)
+	(when (cascade-property-rule cursor prop)
+	  (setf cascaded
+		(or cascaded
+		    (cursor/add-property cursor prop t)))))
+		    
+      ;; return
+      (values cursor cascaded))))
+	    
+
+;;=========================================================================
+
+;;;;
+;;;; repeat-cursor-t never has prop/is-unique-valued
+(defmethod cascade-property-rule ( (rep repeat-cursor-t)
+				  (p (eql :prop/is-unique-valued)))
+  nil)
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
 ;;=========================================================================

@@ -11,6 +11,8 @@
    (:range 10) is a dense index but (:range 0 10 2) is not")
 (defparameter prop/is-labeled :prop/is-labeled
   "Are teh cursor values labeled? if so they are an association list")
+(defparameter prop/is-unique-valued :prop/is-unique-valued
+  "Are the values of a cursor unique")
 
 ;;=========================================================================
 ;;=========================================================================
