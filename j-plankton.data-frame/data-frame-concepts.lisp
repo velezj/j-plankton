@@ -60,6 +60,24 @@
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
+
+;;;;
+;;;; default (setf (slice ...) tensor )
+(defmethod (setf slice)
+    (source-tensor 
+     target-tensor
+     cursor-expression
+     &key
+       drop-empty
+       unused-value)
+  (let ((temp-tensor
+	 (slice target-tensor cursor-expression
+		:drop-empty drop-empty
+		:unused-value unused-value)))
+    (fill-tensor temp-tensor source-tensor)
+    (set-tensor target-tensor temp-tensor)
+    target-tensor))
+
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================

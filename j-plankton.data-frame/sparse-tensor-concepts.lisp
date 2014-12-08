@@ -140,6 +140,39 @@
 
 
 ;;=========================================================================
+
+;;;;
+;;;; Set the valeus fo a tensor from another tensor.
+;;;; Only the *set* values of the srouce tensor are used to
+;;;; set the values of the given tensor.
+(define-concept
+    set-tensor
+    ( (target-tensor "The tensor object whoose values are to 
+                      be set and modified.")
+      (source-tensor "The tensor object whoose values are the source
+                      values"))
+  "Sets teh values of the target sensor to those of teh source
+   tensor.  Only the *set* values of the srouce sensor are used.
+   In this way, the target tensor's *set* values will be a superset
+   of the source tensors (and will be equal if no set values initially")
+
+;;=========================================================================
+
+;;;;
+;;;; Set the valeus fo a tensor from another tensor.
+;;;; Only the *set* values of the *target* tensor are maodfied
+;;;; by the values from the source tensor (whetehr set of not)
+(define-concept
+    fill-tensor
+    ( (target-tensor "The tensor object whoose values are to 
+                      be set and modified.")
+      (source-tensor "The tensor object whoose values are the source
+                      values"))
+  "Sets teh values of the target sensor to those of teh source
+   tensor.  Only the *set* values of the *target* tensor are 
+   modyfied by values from the srouce tensor")
+
+
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
@@ -187,6 +220,79 @@
 			     :default-value nil)
     alist))
 
+;;=========================================================================
+
+;;;;
+;;;; The genric version of set-tensor
+(implement-concept
+    (set-tensor generic
+		 "Sets the values from soruce tensro to target tensor.
+                  The indices from source are used for target, and only
+                  *set* values are used from source"
+		 :default-implementation t)
+    ( (target-tensor "The target tensor which is modified")
+      (source-tensor "Source tensor for values"))
+  (tensor-map-set-elements
+   source-tensor
+   #'(lambda (idx value)
+       (apply #'set-tref target-tensor value idx)))
+  target-tensor)
+
+;;=========================================================================
+
+;;;;
+;;;; The genric version of fill-tensor
+(implement-concept
+    (fill-tensor generic
+		 "Sets the values from soruce tensro to target tensor.
+                  The indices from source are used for target, and only
+                  *set* values of *target* are modyfied."
+		 :default-implementation t)
+    ( (target-tensor "The target tensor which is modified")
+      (source-tensor "Source tensor for values"))
+  (tensor-map-set-elements
+   target-tensor
+   #'(lambda (idx value)
+       (declare (ignore value))
+       (apply #'set-tref target-tensor
+	      (apply #'tref source-tensor idx)
+	      idx)))
+  target-tensor)
+
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
+;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================
 ;;=========================================================================

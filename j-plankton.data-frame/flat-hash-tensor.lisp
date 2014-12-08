@@ -121,8 +121,75 @@
     res-tensor))
 
 ;;============================================================================
+
+;;;;
+;;;; Drop any empty dimensions for this sparse tensor.
+;;;; (empty dimensions are only ever 'at the end' of the dimensoions list.
+(defmethod drop-empty-dimensions ( (tensor hash-tensor-t) )
+  (let ((max-index-dims
+	 (loop for idx being the hash-keys of (data-hashtable tensor)
+	    maximize (length idx))))
+    (setf (num-dimensions tensor)
+	  max-index-dims)))
+  
 ;;============================================================================
 ;;============================================================================
+;;============================================================================
+
+
+;;;;
+;;;; Implement the slice concept for sparse tensor.
+;;;; This is the generic implementation
+(implement-concept (slice generic
+			  "Retrieve subset of elements from a tensor
+                           using a cursor"
+			  :default-implementation t)
+    ( ((tensor hash-tensor-t)
+               "The tensor from which we want a slice.
+                Typically this is a data-frame but it can be other 
+                obsercts such as raw array and such")
+      (cursor-expression "A cursor-expression which determine
+                         the inclusiong of certain objects into the slice.
+                         The cursor value are the indices.")
+      &key
+      (drop-empty t "do we drop empty dimensions in the resulting slice?
+                       By default we do so that the resultign slice is as
+                       'compact' as possible")
+      (unused-value nil "The value for places in hte slice which have
+                           no value. For example, if we sliced a normal 
+                           dense 2D matrix to get a random subset, the
+                           elements we did not 'get' in the slice would
+                           be such 'unused' values")
+      (flatten nil "Do we return a fla tensor (1-dimensional) with the
+                    valeus we asked for ratehr than a structured tensor")
+      &allow-other-keys)
+  
+  (let ((cursor (j-plankton.cursor:cursor-expression->cursor cursor-expression))
+	(flatten nil))
+    (if (not flatten)
+
+	;; keep structuer since flatten is nil
+	(let ((result-tensor (make-sparse-tensor
+			      (num-dimensions tensor)
+			      unused-value)))
+	  (j-plankton.cursor:cursor/loop (idx cursor)
+	    (let ((val (apply #'tref tensor idx)))
+	      (apply #'set-tref result-tensor val idx)))
+	  (when drop-empty
+	    (drop-empty-dimensions result-tensor))
+	  result-tensor)
+	
+	;; else we are flattening
+	(let ((result-tensor (make-sparse-tensor
+			      1 unused-value))
+	      (flat-idx 0))
+	  (format t "faltten is true ...~%")
+	  (j-plankton.cursor:cursor/loop (idx cursor)
+	    (let ((val (apply #'tref tensor idx)))
+	      (set-tref result-tensor val flat-idx)
+	      (incf flat-idx)))
+	  result-tensor))))
+
 ;;============================================================================
 ;;============================================================================
 ;;============================================================================
